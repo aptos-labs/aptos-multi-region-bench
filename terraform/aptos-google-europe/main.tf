@@ -12,6 +12,51 @@ locals {
   project = "omega-booster-372221"
 
   num_nodes = 16
+
+  aptos_affinity = {
+    podAntiAffinity = { # don't schedule nodes on the same host
+      requiredDuringSchedulingIgnoredDuringExecution = [
+        {
+          labelSelector = {
+            matchExpressions = [
+              {
+                key      = "app.kubernetes.io/part-of",
+                operator = "In",
+                values   = ["aptos-node"]
+              }
+            ]
+          }
+          topologyKey = "kubernetes.io/hostname"
+        }
+      ]
+    }
+    nodeAffinity = { # affinity for the right instance types
+      requiredDuringSchedulingIgnoredDuringExecution = {
+        nodeSelectorTerms = [
+          {
+            matchExpressions = [
+              {
+                key      = "cloud.google.com/machine-family",
+                operator = "In",
+                values   = ["t2d"],
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+
+  aptos_resources = {
+    limits = {
+      cpu    = "30"
+      memory = "32Gi"
+    }
+    requests = {
+      cpu    = "30"
+      memory = "32Gi"
+    }
+  }
 }
 
 module "aptos-node" {
@@ -31,10 +76,15 @@ module "aptos-node" {
   era       = 1 # bump era number to wipe the chain. KEEP THIS NUMERIC
   image_tag = "performance_08e9119a20d2c873848dda724d811c239ca393e3"
 
+  # rely on separate monitoring and logging setup
   enable_monitoring = false
   enable_logger     = false
 
-  utility_instance_num = local.num_nodes + 2
+  utility_instance_num                 = local.num_nodes + 2 # Autoscaling configuration
+  gke_enable_autoscaling               = false
+  gke_enable_node_autoprovisioning     = true
+  gke_node_autoprovisioning_max_cpu    = 32 * 100 # space for at least 100 nodes
+  gke_node_autoprovisioning_max_memory = 128 * 100
 
   # configure these
   helm_values = {
@@ -42,11 +92,15 @@ module "aptos-node" {
       image = {
         repo = "us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator"
       }
+      affinity  = local.aptos_affinity
+      resources = local.aptos_resources
     }
     fullnode = {
       image = {
         repo = "us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator"
       }
+      affinity  = local.aptos_affinity
+      resources = local.aptos_resources
     }
   }
 }

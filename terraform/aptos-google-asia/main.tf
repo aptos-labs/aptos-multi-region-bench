@@ -12,6 +12,51 @@ locals {
   project = "omega-booster-372221"
 
   num_nodes = 18
+
+  aptos_affinity = {
+    podAntiAffinity = { # don't schedule nodes on the same host
+      requiredDuringSchedulingIgnoredDuringExecution = [
+        {
+          labelSelector = {
+            matchExpressions = [
+              {
+                key      = "app.kubernetes.io/part-of",
+                operator = "In",
+                values   = ["aptos-node"]
+              }
+            ]
+          }
+          topologyKey = "kubernetes.io/hostname"
+        }
+      ]
+    }
+    nodeAffinity = { # affinity for the right instance types
+      requiredDuringSchedulingIgnoredDuringExecution = {
+        nodeSelectorTerms = [
+          {
+            matchExpressions = [
+              {
+                key      = "cloud.google.com/machine-family",
+                operator = "In",
+                values   = ["t2d"],
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+
+  aptos_resources = {
+    limits = {
+      cpu    = "30"
+      memory = "32Gi"
+    }
+    requests = {
+      cpu    = "30"
+      memory = "32Gi"
+    }
+  }
 }
 
 module "aptos-node" {
@@ -31,21 +76,15 @@ module "aptos-node" {
   era       = 1 # bump era number to wipe the chain. KEEP THIS NUMERIC
   image_tag = "performance_08e9119a20d2c873848dda724d811c239ca393e3"
 
+  # rely on separate monitoring and logging setup
   enable_monitoring = false
   enable_logger     = false
 
-  utility_instance_num = local.num_nodes + 2
-
-  # disable nodepool autoscaling 
-  gke_enable_autoscaling = false
-  # enable node autoprovisioning (NAP)
-  # NOTE: 1000 seems to be the upper bound for NAP
-  # NOTE: Using the recommended n2-standard-32 (32 vCPUs, 128 GB memory) as the target size
+  # Autoscaling configuration
+  gke_enable_autoscaling               = false
   gke_enable_node_autoprovisioning     = true
-  gke_node_autoprovisioning_max_cpu    = 32 * 1000 # space for at least 1000 nodes
-  gke_node_autoprovisioning_max_memory = 128 * 1000
-
-  ### NOTE: storage on each node can be changed via: https://cloud.google.com/kubernetes-engine/docs/how-to/node-auto-provisioning#custom_boot_disk
+  gke_node_autoprovisioning_max_cpu    = 32 * 100 # space for at least 100 nodes
+  gke_node_autoprovisioning_max_memory = 128 * 100
 
   # configure these
   helm_values = {
@@ -53,11 +92,15 @@ module "aptos-node" {
       image = {
         repo = "us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator"
       }
+      affinity  = local.aptos_affinity
+      resources = local.aptos_resources
     }
     fullnode = {
       image = {
         repo = "us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator"
       }
+      affinity  = local.aptos_affinity
+      resources = local.aptos_resources
     }
   }
 }
