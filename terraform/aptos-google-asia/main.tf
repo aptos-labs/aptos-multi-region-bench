@@ -10,6 +10,8 @@ locals {
   region  = "asia-east1"
   zone    = "a"
   project = "omega-booster-372221"
+
+  num_nodes = 18
 }
 
 module "aptos-node" {
@@ -23,15 +25,16 @@ module "aptos-node" {
 
   # for naming purposes to avoid name collisions
   chain_name          = "aptos-google"
-  num_validators      = 2
-  num_fullnode_groups = 2
+  num_validators      = local.num_nodes
+  num_fullnode_groups = local.num_nodes
 
   era       = 1 # bump era number to wipe the chain. KEEP THIS NUMERIC
   image_tag = "performance_08e9119a20d2c873848dda724d811c239ca393e3"
 
-  enable_monitoring    = false
-  enable_logger        = false
-  utility_instance_num = 4
+  enable_monitoring = false
+  enable_logger     = false
+
+  utility_instance_num = local.num_nodes + 2
 
   # disable nodepool autoscaling 
   gke_enable_autoscaling = false
@@ -56,6 +59,7 @@ module "aptos-node" {
         repo = "us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator"
       }
     }
+  }
 }
 
 resource "local_file" "kubectx" {
