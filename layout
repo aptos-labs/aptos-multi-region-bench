@@ -1,0 +1,10 @@
+root_key: "0x48136DF3174A3DE92AFDB375FFE116908B69FF6FAB9B1410E548A33FEA1D159D"
+users:
+  - aptos-google-na-1
+  - aptos-google-na-2
+  - aptos-google-na-3
+  - aptos-google-europe-1
+  - aptos-google-europe-2
+  - aptos-google-asia-1
+  - aptos-google-asia-2
+chain_id: 4
