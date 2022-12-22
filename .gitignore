@@ -31,4 +31,4 @@ tf_plan_comment.txt
 tf_plan.txt
 
 # genesis artifacts
--genesis.yaml
+*-genesis.yaml
