@@ -347,7 +347,8 @@ def kube(
 def kube_commands(
     args: Tuple[str, ...],
 ) -> None:
-    args = "".join(args).split()
+    args = " ".join(args).split()
+    print(args)
     for cluster in CLUSTERS:
         cluster_kube_config = KUBE_CONTEXTS[cluster]
         print(f"=== {cluster.value} ===")
