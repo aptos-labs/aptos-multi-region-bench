@@ -149,7 +149,7 @@ def main() -> None:
 def auth_all_Cluster() -> int:
     ret = 0
     for cluster in Cluster:
-        cp = subprocess.run(["bash", f"./terraform/{cluster}/kubectx.sh"])
+        cp = subprocess.run(["bash", f"./terraform/{cluster.value}/kubectx.sh"])
         if cp.returncode != 0:
             ret = cp.returncode
             print(f"Failed to authenticate with cluster: {cluster}")
@@ -231,11 +231,18 @@ def set_validator_configuration_for_genesis() -> None:
                 raise SystemExit(1)
 
 
-# create genesis
 @main.group()
 def genesis() -> None:
     """
     Create genesis for the network
+    """
+    pass
+
+
+@main.group()
+def kube() -> None:
+    """
+    Run kube commands across all clusters
     """
     pass
 
@@ -333,6 +340,26 @@ def kube(
             cluster_genesis_fd.flush()
             cluster_genesis_fd.write(f"---\n")
             cluster_genesis_fd.flush()
+
+
+@main.command("kube")
+@click.argument("args", nargs=-1)
+def kube_commands(
+    args: Tuple[str, ...],
+) -> None:
+    args = "".join(args).split()
+    for cluster in CLUSTERS:
+        cluster_kube_config = KUBE_CONTEXTS[cluster]
+        print(f"=== {cluster.value} ===")
+        subprocess.run(
+            [
+                "kubectl",
+                "--context",
+                cluster_kube_config,
+                *args,
+            ]
+        )
+        print()
 
 
 if __name__ == "__main__":
