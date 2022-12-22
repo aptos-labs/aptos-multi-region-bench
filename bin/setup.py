@@ -20,6 +20,7 @@ class Cluster(Enum):
     EU = "aptos-google-europe"
     ASIA = "aptos-google-asia"
 
+
 GENESIS_DIRECTORY = "genesis"
 
 GCP_PROJECT_NAME = "omega-booster-372221"
@@ -206,7 +207,7 @@ def set_validator_configuration_for_genesis() -> None:
             node_index = f"node-{i}"
             node_username = f"{cluster.value}-{node_index}"
             print(f"Setting validator configuration for {node_username} via aptos CLI")
-            subprocess.run(
+            cp = subprocess.run(
                 [
                     "aptos",
                     "genesis",
@@ -214,7 +215,7 @@ def set_validator_configuration_for_genesis() -> None:
                     "--owner-public-identity-file",
                     f"{GENESIS_DIRECTORY}/{node_username}/public-keys.yaml",
                     "--local-repository-dir",
-                    "{GENESIS_DIRECTORY}",
+                    GENESIS_DIRECTORY,
                     "--username",
                     node_username,
                     "--validator-host",
@@ -225,6 +226,9 @@ def set_validator_configuration_for_genesis() -> None:
                     f"{10**8 * 10**6}",  # 1M APT in octas
                 ]
             )
+            if cp.returncode != 0:
+                print(f"Failed to set validator configuration for {node_username}")
+                raise SystemExit(1)
 
 
 # create genesis
