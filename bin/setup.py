@@ -22,7 +22,7 @@ class Cluster(Enum):
 
 
 GENESIS_DIRECTORY = "genesis"
-
+ERA = 1
 GCP_PROJECT_NAME = "omega-booster-372221"
 CLUSTERS = {Cluster.NA: 16, Cluster.EU: 16, Cluster.ASIA: 18}
 KUBE_CONTEXTS = {
@@ -40,7 +40,7 @@ for cluster, context in KUBE_CONTEXTS.items():
 LAYOUT = {
     "root_key": "0x48136DF3174A3DE92AFDB375FFE116908B69FF6FAB9B1410E548A33FEA1D159D",
     "users": [
-        f"{cluster.value}-node-{i}"
+        f"{cluster.value}-aptos-node-{i}"
         for cluster in CLUSTERS
         for i in range(CLUSTERS[cluster])
     ],
@@ -187,7 +187,7 @@ def auth() -> None:
 def generate_keys_for_genesis() -> None:
     for cluster, nodes_per_cluster in CLUSTERS.items():
         for i in range(nodes_per_cluster):
-            node_name = f"node-{i}"
+            node_name = f"aptos-node-{i}"
             subprocess.run(
                 [
                     "aptos",
@@ -204,7 +204,7 @@ def set_validator_configuration_for_genesis() -> None:
     for cluster in CLUSTERS:
         validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
         for i, hosts in enumerate(validator_fullnode_hosts_cluster_list):
-            node_index = f"node-{i}"
+            node_index = f"aptos-node-{i}"
             node_username = f"{cluster.value}-{node_index}"
             print(f"Setting validator configuration for {node_username} via aptos CLI")
             cp = subprocess.run(
@@ -232,7 +232,15 @@ def set_validator_configuration_for_genesis() -> None:
 
 
 # create genesis
-@main.command("genesis")
+@main.group()
+def genesis() -> None:
+    """
+    Create genesis for the network
+    """
+    pass
+
+
+@genesis.command("create")
 @click.option(
     "--generate-keys",
     is_flag=True,
@@ -245,12 +253,12 @@ def set_validator_configuration_for_genesis() -> None:
     default=False,
     help="Set validator config. Reuse files on disk if unset",
 )
-def genesis(
+def create_genesis(
     generate_keys: bool = False,
     set_validator_config: bool = False,
 ) -> None:
     """
-    Create genesis for the network
+    Create genesis for the network and write it to the genesis directory
     """
     # generate new keys for each node
     if generate_keys:
@@ -278,6 +286,53 @@ def genesis(
             GENESIS_DIRECTORY,
         ]
     )
+
+
+# create genesis
+@genesis.command("kube")
+@click.option(
+    "--apply",
+    is_flag=True,
+    default=False,
+    help="Apply the genesis secrets to the relevant k8s clusters",
+)
+def kube(
+    apply: bool = False,
+) -> None:
+    """
+    Create genesis kubernetes secrets for each validator
+    """
+    dry_run_args = ["--dry-run=client", "--output=yaml"]
+
+    # use kubectl to easily create secrets from files
+    for cluster, nodes_per_cluster in CLUSTERS.items():
+        cluster_kube_config = KUBE_CONTEXTS[cluster]
+        cluster_genesis_fd = open(f"{cluster.value}-genesis.yaml", "w")
+
+        for i in range(nodes_per_cluster):
+            node_name = f"aptos-node-{i}"
+            node_username = f"{cluster.value}-{node_name}"
+
+            subprocess.run(
+                [
+                    "kubectl",
+                    "--context",
+                    cluster_kube_config,
+                    "create",
+                    "secret",
+                    "generic",
+                    f"{node_username}-genesis-e{ERA}",
+                    f"--from-file=genesis.blob={GENESIS_DIRECTORY}/genesis.blob",
+                    f"--from-file=waypoint.txt={GENESIS_DIRECTORY}/waypoint.txt",
+                    f"--from-file=validator-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-identity.yaml",
+                    f"--from-file=validator-full-node-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-full-node-identity.yaml",
+                ]
+                + (dry_run_args if not apply else []),
+                stdout=cluster_genesis_fd,
+            )
+            cluster_genesis_fd.flush()
+            cluster_genesis_fd.write(f"---\n")
+            cluster_genesis_fd.flush()
 
 
 if __name__ == "__main__":
