@@ -140,6 +140,7 @@ def automatically_determine_targets() -> List[str]:
 # authenticate with each network
 @click.group()
 def main() -> None:
+    """Aptos Multi-region Cluster Management CLI"""
     # Check that the current directory is the root of the repository.
     if not os.path.exists(".git"):
         print("This script must be run from the root of the repository.")
@@ -170,6 +171,7 @@ def reauth_gcloud() -> int:
 
 @main.command("auth")
 def auth() -> None:
+    """Authenticate with all clusters"""
     ret = auth_all_clusters()
     if ret != 0:
         print("Failed to authenticate with cluster")
@@ -354,6 +356,7 @@ def kube_commands(
     args: Tuple[str, ...],
     cluster: Cluster,
 ) -> None:
+    """Run kubectl commands on the selected cluster(s)"""
     args = " ".join(args).split()
     print(args)
     for available_cluster in CLUSTERS:
