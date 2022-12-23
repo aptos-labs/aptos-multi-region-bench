@@ -19,10 +19,12 @@ class Cluster(Enum):
     NA = "aptos-google-na"
     EU = "aptos-google-europe"
     ASIA = "aptos-google-asia"
+    ALL = "all"
 
 
 GENESIS_DIRECTORY = "genesis"
 ERA = 1
+
 GCP_PROJECT_NAME = "omega-booster-372221"
 CLUSTERS = {Cluster.NA: 16, Cluster.EU: 16, Cluster.ASIA: 18}
 KUBE_CONTEXTS = {
@@ -34,9 +36,8 @@ NAMESPACE = "default"
 KUBE_CLIENTS = {}
 config.load_kube_config()
 for cluster, context in KUBE_CONTEXTS.items():
-    KUBE_CLIENTS[cluster] = client.CoreV1Api(
-        config.new_client_from_config(context=context)
-    )
+    KUBE_CLIENTS[cluster] = config.new_client_from_config(context=context)
+
 LAYOUT = {
     "root_key": "0x48136DF3174A3DE92AFDB375FFE116908B69FF6FAB9B1410E548A33FEA1D159D",
     "users": [
@@ -104,7 +105,7 @@ def get_validator_fullnode_hosts(
     Get the validator and fullnode hosts for the given cluster, in sorted order by their index
     """
     # get the services for each cluster
-    client = KUBE_CLIENTS[cluster]
+    client = client.CoreV1Api(KUBE_CLIENTS[cluster])
     services = client.list_namespaced_service(namespace=NAMESPACE)
 
     validator_fullnode_hosts_list = []
@@ -146,9 +147,9 @@ def main() -> None:
         raise SystemExit(1)
 
 
-def auth_all_Cluster() -> int:
+def auth_all_clusters() -> int:
     ret = 0
-    for cluster in Cluster:
+    for cluster in CLUSTERS:
         cp = subprocess.run(["bash", f"./terraform/{cluster.value}/kubectx.sh"])
         if cp.returncode != 0:
             ret = cp.returncode
@@ -170,7 +171,7 @@ def reauth_gcloud() -> int:
 
 @main.command("auth")
 def auth() -> None:
-    ret = auth_all_Cluster()
+    ret = auth_all_clusters()
     if ret != 0:
         print("Failed to authenticate with cluster")
         print("Attempting to re-authenticate with gcloud...")
@@ -178,7 +179,7 @@ def auth() -> None:
         if ret != 0:
             print("Failed to re-authenticate with gcloud")
             raise SystemExit(1)
-        ret = auth_all_Cluster()
+        ret = auth_all_clusters()
         if ret != 0:
             print("Failed to authenticate with cluster")
             raise SystemExit(1)
@@ -344,14 +345,23 @@ def kube(
 
 @main.command("kube")
 @click.argument("args", nargs=-1)
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
 def kube_commands(
     args: Tuple[str, ...],
+    cluster: Cluster,
 ) -> None:
     args = " ".join(args).split()
     print(args)
-    for cluster in CLUSTERS:
-        cluster_kube_config = KUBE_CONTEXTS[cluster]
-        print(f"=== {cluster.value} ===")
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+            continue
+        cluster_kube_config = KUBE_CONTEXTS[available_cluster]
+        print(f"=== {available_cluster.value} ===")
         subprocess.run(
             [
                 "kubectl",
@@ -361,6 +371,70 @@ def kube_commands(
             ]
         )
         print()
+
+
+def patch_node_scale(
+    cluster: Cluster,
+    node_name: str,
+    replicas: int,
+) -> None:
+    """
+    Patch the node count for the given node
+    """
+    apps_client = client.AppsV1Api(KUBE_CLIENTS[cluster])
+    apps_client.patch_namespaced_deployment_scale(
+        f"{cluster.value}-{node_name}-haproxy",
+        "default",
+        [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
+    )
+    apps_client.patch_namespaced_stateful_set_scale(
+        f"{cluster.value}-{node_name}-fullnode-e{ERA}",
+        "default",
+        [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
+    )
+    apps_client.patch_namespaced_stateful_set_scale(
+        f"{cluster.value}-{node_name}-validator",
+        "default",
+        [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
+    )
+
+
+@main.command("stop")
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
+def kube_commands(
+    cluster: Cluster,
+) -> None:
+    """Stop all compute on the cluster"""
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+            continue
+        for i in range(CLUSTERS[available_cluster]):
+            node_name = f"aptos-node-{i}"
+            patch_node_scale(available_cluster, node_name, 0)
+
+
+@main.command("start")
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
+def kube_commands(
+    cluster: Cluster,
+) -> None:
+    """Start all compute on the cluster"""
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+            continue
+        for i in range(CLUSTERS[available_cluster]):
+            node_name = f"aptos-node-{i}"
+            patch_node_scale(available_cluster, node_name, 1)
 
 
 if __name__ == "__main__":
