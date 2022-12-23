@@ -5,14 +5,13 @@ from dataclasses import dataclass
 from enum import Enum
 
 import subprocess
-from typing import List, Optional, Sequence, Tuple, TypedDict
+from typing import List, Tuple
 
 import click
 import yaml
 import os
-import json
 
-from kubernetes import client, config, watch
+from kubernetes import client, config
 
 
 class Cluster(Enum):
