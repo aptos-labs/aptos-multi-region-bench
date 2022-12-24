@@ -69,7 +69,7 @@ locals {
 
 
 module "forge" {
-  source = "github.com/aptos-labs/aptos-core.git//terraform/aptos-node-testnet/gcp?ref=experimental"
+  source = "../../submodules/aptos-core-experimental/terraform/aptos-node/gcp"
 
   manage_via_tf = true
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
+import json
 
 import subprocess
 from typing import List, Tuple
@@ -22,6 +23,11 @@ class Cluster(Enum):
 
 
 GENESIS_DIRECTORY = "genesis"
+APTOS_NODE_HELM_CHART_DIRECTORY = (
+    "submodules/aptos-core-experimental/terraform/helm/aptos-node"
+)
+APTOS_NODE_HELM_VALUES_FILE = "aptos_node_helm_values.yaml"
+
 ERA = 1
 
 GCP_PROJECT_NAME = "omega-booster-372221"
@@ -117,24 +123,6 @@ def get_validator_fullnode_hosts(
 
     assert len(validator_fullnode_hosts_list) == num_nodes
     return validator_fullnode_hosts_list
-
-
-def automatically_determine_targets() -> List[str]:
-    """
-    Automatically determine the targets for fullnode and validator hosts based on k8s services
-    """
-    output = subprocess.check_output(["kubectl", "get", "svc", "-o", "yaml"])
-    services = yaml.safe_load(output)
-    targets = []
-    for service in services["items"]:
-        # If we have ingress we can take traffic
-        ingress = service.get("status", {}).get("loadBalancer", {}).get("ingress")
-        name = service.get("metadata", {}).get("name", "")
-        if ingress and "validator" in name:
-            # Port is hardcoded for now
-            port = 80
-            targets.append(f"http://{name}:{port}")
-    return targets
 
 
 # authenticate with each network
@@ -297,26 +285,34 @@ def create_genesis(
     )
 
 
-# create genesis
-@genesis.command("kube")
+@genesis.command("upload")
 @click.option(
     "--apply",
     is_flag=True,
     default=False,
     help="Apply the genesis secrets to the relevant k8s clusters",
 )
-def kube(
+def kube_upload_genesis(
     apply: bool = False,
 ) -> None:
     """
-    Create genesis kubernetes secrets for each validator
+    Upload genesis kubernetes secrets for each validator
     """
     dry_run_args = ["--dry-run=client", "--output=yaml"]
+
+    # current_era = get_current_era()
+    with open(APTOS_NODE_HELM_VALUES_FILE, "r") as genesis_file:
+        values = yaml.load(genesis_file, Loader=yaml.FullLoader)
+        current_era = values["chain"]["era"]
+        print(f"Current era: {current_era}")
 
     # use kubectl to easily create secrets from files
     for cluster, nodes_per_cluster in CLUSTERS.items():
         cluster_kube_config = KUBE_CONTEXTS[cluster]
         cluster_genesis_fd = open(f"{cluster.value}-genesis.yaml", "w")
+
+        # wipe the previous eras stuff too
+        clean_previous_era_secrets(cluster, current_era)
 
         for i in range(nodes_per_cluster):
             node_name = f"aptos-node-{i}"
@@ -330,7 +326,7 @@ def kube(
                     "create",
                     "secret",
                     "generic",
-                    f"{node_username}-genesis-e{ERA}",
+                    f"{node_username}-genesis-e{current_era}",
                     f"--from-file=genesis.blob={GENESIS_DIRECTORY}/genesis.blob",
                     f"--from-file=waypoint.txt={GENESIS_DIRECTORY}/waypoint.txt",
                     f"--from-file=validator-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-identity.yaml",
@@ -384,20 +380,24 @@ def patch_node_scale(
     Patch the node count for the given node
     """
     apps_client = client.AppsV1Api(KUBE_CLIENTS[cluster])
+    long_node_name = f"{cluster.value}-{node_name}"
     apps_client.patch_namespaced_deployment_scale(
-        f"{cluster.value}-{node_name}-haproxy",
-        "default",
+        f"{long_node_name}-haproxy",
+        NAMESPACE,
         [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
     )
     apps_client.patch_namespaced_stateful_set_scale(
-        f"{cluster.value}-{node_name}-fullnode-e{ERA}",
-        "default",
+        f"{long_node_name}-fullnode-e{ERA}",
+        NAMESPACE,
         [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
     )
     apps_client.patch_namespaced_stateful_set_scale(
-        f"{cluster.value}-{node_name}-validator",
-        "default",
+        f"{long_node_name}-validator",
+        NAMESPACE,
         [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
+    )
+    print(
+        f"Patched {long_node_name} (haproxy, validator, fullnode) scale to {replicas}"
     )
 
 
@@ -437,6 +437,196 @@ def kube_commands(
         for i in range(CLUSTERS[available_cluster]):
             node_name = f"aptos-node-{i}"
             patch_node_scale(available_cluster, node_name, 1)
+
+
+def get_current_era() -> str:
+    """
+    Get the current era from each of the clusters. They should be matching
+    """
+    eras = set()
+    # for each cluster, infer the era from the helm values
+    for available_cluster in CLUSTERS:
+        cluster_kube_config = KUBE_CONTEXTS[available_cluster]
+        ret = subprocess.run(
+            [
+                "helm",
+                "--kube-context",
+                cluster_kube_config,
+                "get",
+                "values",
+                available_cluster.value,  # the helm_release is named after the cluster it is in
+                "-o",
+                "json",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
+        try:
+            values = json.loads(ret.stdout)
+            e = values["chain"]["era"]
+        except Exception as e:
+            print(f"Error fetching helm values for cluster {available_cluster.value}")
+            print(e)
+            print(ret.stdout)
+            raise
+        eras.add(e)
+
+    assert len(eras) == 1, "Eras are not matching across clusters"
+    cluster_era = eras.pop()
+    print(f"Current testnet era across all clusters: {cluster_era}")
+    return cluster_era
+
+
+def aptos_node_helm_upgrade(
+    available_cluster: Cluster, helm_chart_directory: str, values_file: str
+) -> Tuple[Cluster, int]:
+    num_nodes = CLUSTERS[available_cluster]
+    helm_upgrade_override_values = [
+        "--set",
+        f"numFullnodeGroups={num_nodes}",
+        "--set",
+        f"numValidators={num_nodes}",
+    ]
+    return subprocess.Popen(
+        [
+            "helm",
+            "--kube-context",
+            KUBE_CONTEXTS[available_cluster],
+            "upgrade",
+            "--install",
+            available_cluster.value,  # the helm_release is named after the cluster it is in
+            helm_chart_directory,  # the helm chart version is that of the subdirectory
+            "-f",
+            values_file,
+            *helm_upgrade_override_values,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+@main.command("helm-upgrade")
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
+@click.option(
+    "--values-file",
+    "-f",
+    type=click.Path(exists=True),
+    help="Path to the values file to use",
+    required=True,
+    default=APTOS_NODE_HELM_VALUES_FILE,
+)
+@click.option(
+    "--helm-chart-directory",
+    "-d",
+    type=click.Path(exists=True),
+    help="Path to the helm chart directory",
+    default=APTOS_NODE_HELM_CHART_DIRECTORY,
+)
+def helm_upgrade(
+    cluster: Cluster,
+    values_file: str,
+    helm_chart_directory: str,
+) -> None:
+    """Helm upgrade all aptos-nodes on the cluster"""
+    procs = []
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+            continue
+        procs.append(
+            aptos_node_helm_upgrade(
+                available_cluster, helm_chart_directory, values_file
+            )
+        )
+
+    # wait for everything
+    for proc in procs:
+        proc.wait()
+        if proc.returncode != 0:
+            print(f"Error upgrading helm chart for cluster {proc.args[3]}")
+            outs, errs = proc.communicate()
+            print(outs)
+            print(errs)
+            raise SystemExit(1)
+
+
+def clean_previous_era_secrets(available_cluster: Cluster, era: str) -> None:
+    """
+    Clean up previous era secrets from the given cluster
+    """
+    genesis_secret_era_substring = "genesis-e"
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+            continue
+        core_client = client.CoreV1Api(KUBE_CLIENTS[available_cluster])
+        secrets = core_client.list_namespaced_secret(NAMESPACE)
+        for secret in secrets.items:
+            # if the secret has an era in the name and is not the current era, delete it
+            if (
+                genesis_secret_era_substring in secret.metadata.name
+                and f"{genesis_secret_era_substring}{era}" not in secret.metadata.name
+            ):
+                print(f"Deleting secret {secret.metadata.name}")
+                core_client.delete_namespaced_secret(
+                    secret.metadata.name, secret.metadata.namespace
+                )
+
+
+def clean_previous_era_pvc(available_cluster: Cluster, era: str) -> None:
+    """
+    Clean up previous era PVCs from the given cluster
+    """
+    fullnode_pvc_era_substring = "fullnode-e"
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+            continue
+        core_client = client.CoreV1Api(KUBE_CLIENTS[available_cluster])
+        pvcs = core_client.list_namespaced_persistent_volume_claim(NAMESPACE)
+        for pvc in pvcs.items:
+            # if the PVC has an era in the name and is not the current era, delete it
+            if (
+                fullnode_pvc_era_substring in pvc.metadata.name
+                and f"{fullnode_pvc_era_substring}{era}" not in pvc.metadata.name
+            ):
+                print(f"Deleting PVC {pvc.metadata.name}")
+                core_client.delete_namespaced_persistent_volume_claim(
+                    pvc.metadata.name, pvc.metadata.namespace
+                )
+
+
+@main.command("era-clean")
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
+@click.option(
+    "--era",
+    type=str,
+    help="The current era. Everything else will be cleaned up other than this era",
+    required=True,
+)
+def clean_previous_era_resources(cluster: Cluster, era: str) -> None:
+    """
+    Clean up previous era resources from the given cluster
+    """
+    # delete the previous era's resources
+    clean_previous_era_secrets(cluster, era)
+    clean_previous_era_pvc(cluster, era)
+
+
+# def wipe()
+# run genesis locally
+# upload genesis materials
+# run helm upgrade
 
 
 if __name__ == "__main__":

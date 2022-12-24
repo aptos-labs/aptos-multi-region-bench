@@ -1,0 +1,4 @@
+[submodule "submodules/aptos-core-experimental"]
+	path = submodules/aptos-core-experimental
+	url = https://github.com/aptos-labs/aptos-core
+	branch = experimental

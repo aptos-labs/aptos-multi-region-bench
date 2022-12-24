@@ -1,0 +1,70 @@
+chain:
+  chain_id: TESTING
+  chain_name: aptos-google
+  era: 6
+chart_sha1: 2a472f76b1124a57172a902029640f1f3a01e902
+fullnode:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cloud.google.com/machine-family
+                operator: In
+                values:
+                  - t2d
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/part-of
+                operator: In
+                values:
+                  - aptos-node
+          topologyKey: kubernetes.io/hostname
+  image:
+    repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
+  resources:
+    limits:
+      cpu: "30"
+      memory: 32Gi
+    requests:
+      cpu: "30"
+      memory: 32Gi
+  storage:
+    class: ssd
+    size: 1000Gi
+
+imageTag: performance_f668934f582a25b4ab5873129891acf78018d356
+
+validator:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cloud.google.com/machine-family
+                operator: In
+                values:
+                  - t2d
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/part-of
+                operator: In
+                values:
+                  - aptos-node
+          topologyKey: kubernetes.io/hostname
+  image:
+    repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
+  resources:
+    limits:
+      cpu: "30"
+      memory: 32Gi
+    requests:
+      cpu: "30"
+      memory: 32Gi
+  storage:
+    class: ssd
+    size: 1000Gi

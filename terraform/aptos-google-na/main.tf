@@ -57,10 +57,16 @@ locals {
       memory = "32Gi"
     }
   }
+
+  aptos_storage = {
+    size = "1000Gi"
+  }
 }
 
 module "aptos-node" {
-  source = "github.com/aptos-labs/aptos-core.git//terraform/aptos-node/gcp?ref=experimental"
+  source = "../../submodules/aptos-core-experimental/terraform/aptos-node/gcp"
+
+  manage_via_tf = false
 
   region  = "us-west1"             # Specify the region
   zone    = "a"                    # Specify the zone suffix
@@ -94,6 +100,7 @@ module "aptos-node" {
       }
       affinity  = local.aptos_affinity
       resources = local.aptos_resources
+      storage   = local.aptos_storage
     }
     fullnode = {
       image = {
@@ -101,6 +108,8 @@ module "aptos-node" {
       }
       affinity  = local.aptos_affinity
       resources = local.aptos_resources
+      storage   = local.aptos_storage
+
     }
   }
 }

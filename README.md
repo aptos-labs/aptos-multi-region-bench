@@ -9,6 +9,7 @@ terraform/aptos-google-{asia,na,europe} - all part of multi region testnet
 ## Scripts
 
 bin/loadtest.py - little loadtest utility.
+bin/cluster.py - cluster management utility. Creates genesis, and manages nodes lifecycle
 
 This creates a loadtest pod in the current cluster
 
@@ -29,6 +30,6 @@ Google Cloud Inter-Region Latency and Throughput: [link](https://datastudio.goog
 
 ## Get the latest aptos framework
 
-docker run -it us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:${IMAGE_TAG} bash
+docker run -it aptoslabs/tools:${IMAGE_TAG} bash
 
-docker cp `docker container ls | grep tools:${IMAGE_TAG} | awk '{print $1}'`:/aptos-framework/move/head.mrb keys/framework.mrb 
+docker cp `docker container ls | grep tools:${IMAGE_TAG} | awk '{print $1}'`:/aptos-framework/move/head.mrb genesis/framework.mrb 
