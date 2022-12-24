@@ -28,8 +28,30 @@ Google Cloud Inter-Region Latency and Throughput: [link](https://datastudio.goog
 * Login: `gcloud auth login --update-adc`
 * Set gcloud project: `gcloud config set project omega-booster-372221`
 
-## Get the latest aptos framework
+## Helpful commands
 
+Grab the latest aptos-framework for genesis
+
+```
 docker run -it aptoslabs/tools:${IMAGE_TAG} bash
-
 docker cp `docker container ls | grep tools:${IMAGE_TAG} | awk '{print $1}'`:/aptos-framework/move/head.mrb genesis/framework.mrb 
+```
+
+Spin up or down compute, e.g. to save cost by going idle
+
+```
+./bin/cluster.py start
+./bin/cluster.py stop
+```
+
+Wipe the network and start from scratch
+
+```
+<edit aptos_node_helm_values.yaml with a new chain.era>
+
+# re-run genesis and upload to all nodes
+yes | ./bin/cluster.py genesis create  && ./bin/cluster.py genesis upload --apply
+
+# upgrade all nodes (this may take a few minutes)
+time ./bin/cluster.py helm-upgrade
+```

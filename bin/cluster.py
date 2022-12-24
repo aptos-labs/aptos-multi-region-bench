@@ -350,13 +350,14 @@ def kube_upload_genesis(
 )
 def kube_commands(
     args: Tuple[str, ...],
-    cluster: Cluster,
+    cluster: str,
 ) -> None:
     """Run kubectl commands on the selected cluster(s)"""
+    cluster = Cluster(cluster)
     args = " ".join(args).split()
     print(args)
     for available_cluster in CLUSTERS:
-        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+        if cluster != available_cluster and cluster != Cluster.ALL:
             continue
         cluster_kube_config = KUBE_CONTEXTS[available_cluster]
         print(f"=== {available_cluster.value} ===")
@@ -409,11 +410,11 @@ def patch_node_scale(
     help="Cluster to run the command on",
 )
 def kube_commands(
-    cluster: Cluster,
+    cluster: str,
 ) -> None:
     """Stop all compute on the cluster"""
     for available_cluster in CLUSTERS:
-        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+        if cluster != available_cluster and cluster != Cluster.ALL:
             continue
         for i in range(CLUSTERS[available_cluster]):
             node_name = f"aptos-node-{i}"
@@ -428,11 +429,11 @@ def kube_commands(
     help="Cluster to run the command on",
 )
 def kube_commands(
-    cluster: Cluster,
+    cluster: str,
 ) -> None:
     """Start all compute on the cluster"""
     for available_cluster in CLUSTERS:
-        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+        if cluster != available_cluster and cluster != Cluster.ALL:
             continue
         for i in range(CLUSTERS[available_cluster]):
             node_name = f"aptos-node-{i}"
@@ -445,8 +446,8 @@ def get_current_era() -> str:
     """
     eras = set()
     # for each cluster, infer the era from the helm values
-    for available_cluster in CLUSTERS:
-        cluster_kube_config = KUBE_CONTEXTS[available_cluster]
+    for cluster in CLUSTERS:
+        cluster_kube_config = KUBE_CONTEXTS[cluster]
         ret = subprocess.run(
             [
                 "helm",
@@ -454,7 +455,7 @@ def get_current_era() -> str:
                 cluster_kube_config,
                 "get",
                 "values",
-                available_cluster.value,  # the helm_release is named after the cluster it is in
+                cluster.value,  # the helm_release is named after the cluster it is in
                 "-o",
                 "json",
             ],
@@ -467,7 +468,7 @@ def get_current_era() -> str:
             values = json.loads(ret.stdout)
             e = values["chain"]["era"]
         except Exception as e:
-            print(f"Error fetching helm values for cluster {available_cluster.value}")
+            print(f"Error fetching helm values for cluster {cluster.value}")
             print(e)
             print(ret.stdout)
             raise
@@ -480,9 +481,9 @@ def get_current_era() -> str:
 
 
 def aptos_node_helm_upgrade(
-    available_cluster: Cluster, helm_chart_directory: str, values_file: str
+    cluster: Cluster, helm_chart_directory: str, values_file: str
 ) -> Tuple[Cluster, int]:
-    num_nodes = CLUSTERS[available_cluster]
+    num_nodes = CLUSTERS[cluster]
     helm_upgrade_override_values = [
         "--set",
         f"numFullnodeGroups={num_nodes}",
@@ -493,10 +494,10 @@ def aptos_node_helm_upgrade(
         [
             "helm",
             "--kube-context",
-            KUBE_CONTEXTS[available_cluster],
+            KUBE_CONTEXTS[cluster],
             "upgrade",
             "--install",
-            available_cluster.value,  # the helm_release is named after the cluster it is in
+            cluster.value,  # the helm_release is named after the cluster it is in
             helm_chart_directory,  # the helm chart version is that of the subdirectory
             "-f",
             values_file,
@@ -531,14 +532,15 @@ def aptos_node_helm_upgrade(
     default=APTOS_NODE_HELM_CHART_DIRECTORY,
 )
 def helm_upgrade(
-    cluster: Cluster,
+    cluster: str,
     values_file: str,
     helm_chart_directory: str,
 ) -> None:
     """Helm upgrade all aptos-nodes on the cluster"""
+    cluster = Cluster(cluster)
     procs = []
     for available_cluster in CLUSTERS:
-        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+        if cluster != available_cluster and cluster != Cluster.ALL:
             continue
         procs.append(
             aptos_node_helm_upgrade(
@@ -557,13 +559,13 @@ def helm_upgrade(
             raise SystemExit(1)
 
 
-def clean_previous_era_secrets(available_cluster: Cluster, era: str) -> None:
+def clean_previous_era_secrets(cluster: Cluster, era: str) -> None:
     """
     Clean up previous era secrets from the given cluster
     """
     genesis_secret_era_substring = "genesis-e"
     for available_cluster in CLUSTERS:
-        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+        if cluster != available_cluster and cluster != Cluster.ALL:
             continue
         core_client = client.CoreV1Api(KUBE_CLIENTS[available_cluster])
         secrets = core_client.list_namespaced_secret(NAMESPACE)
@@ -579,13 +581,13 @@ def clean_previous_era_secrets(available_cluster: Cluster, era: str) -> None:
                 )
 
 
-def clean_previous_era_pvc(available_cluster: Cluster, era: str) -> None:
+def clean_previous_era_pvc(cluster: Cluster, era: str) -> None:
     """
     Clean up previous era PVCs from the given cluster
     """
     fullnode_pvc_era_substring = "fullnode-e"
     for available_cluster in CLUSTERS:
-        if cluster != available_cluster.value and cluster != Cluster.ALL.value:
+        if cluster != available_cluster and cluster != Cluster.ALL:
             continue
         core_client = client.CoreV1Api(KUBE_CLIENTS[available_cluster])
         pvcs = core_client.list_namespaced_persistent_volume_claim(NAMESPACE)
@@ -614,19 +616,14 @@ def clean_previous_era_pvc(available_cluster: Cluster, era: str) -> None:
     help="The current era. Everything else will be cleaned up other than this era",
     required=True,
 )
-def clean_previous_era_resources(cluster: Cluster, era: str) -> None:
+def clean_previous_era_resources(cluster: str, era: str) -> None:
     """
     Clean up previous era resources from the given cluster
     """
     # delete the previous era's resources
+    cluster = Cluster(cluster)
     clean_previous_era_secrets(cluster, era)
     clean_previous_era_pvc(cluster, era)
-
-
-# def wipe()
-# run genesis locally
-# upload genesis materials
-# run helm upgrade
 
 
 if __name__ == "__main__":
