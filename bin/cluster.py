@@ -382,18 +382,21 @@ def patch_node_scale(
     """
     apps_client = client.AppsV1Api(KUBE_CLIENTS[cluster])
     long_node_name = f"{cluster.value}-{node_name}"
+    validator_sts_prefix = f"{long_node_name}-validator"
+    fullnode_sts_prefix = f"{long_node_name}-fullnode-e"
+    stateful_sets = apps_client.list_namespaced_stateful_set(NAMESPACE)
+    for stateful_set in stateful_sets.items:
+        if (
+            validator_sts_prefix in stateful_set.metadata.name
+            or fullnode_sts_prefix in stateful_set.metadata.name
+        ):
+            apps_client.patch_namespaced_stateful_set_scale(
+                stateful_set.metadata.name,
+                NAMESPACE,
+                [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
+            )
     apps_client.patch_namespaced_deployment_scale(
         f"{long_node_name}-haproxy",
-        NAMESPACE,
-        [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
-    )
-    apps_client.patch_namespaced_stateful_set_scale(
-        f"{long_node_name}-fullnode-e{ERA}",
-        NAMESPACE,
-        [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
-    )
-    apps_client.patch_namespaced_stateful_set_scale(
-        f"{long_node_name}-validator",
         NAMESPACE,
         [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
     )
@@ -413,6 +416,7 @@ def kube_commands(
     cluster: str,
 ) -> None:
     """Stop all compute on the cluster"""
+    cluster = Cluster(cluster)
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
@@ -432,6 +436,7 @@ def kube_commands(
     cluster: str,
 ) -> None:
     """Start all compute on the cluster"""
+    cluster = Cluster(cluster)
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
