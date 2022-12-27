@@ -6,7 +6,7 @@ from typing import List, Optional, Sequence, Tuple, TypedDict
 import click
 import yaml
 from cluster import get_validator_fullnode_hosts
-from constants import CLUSTERS
+from constants import CLUSTERS, KUBE_CONTEXTS
 
 
 class Metadata(TypedDict):
@@ -131,9 +131,25 @@ def automatically_determine_targets() -> List[str]:
 
 
 def apply_spec(spec: PodTemplate) -> None:
-    subprocess.run(["kubectl", "delete", "pod", spec["metadata"]["name"]])
-    yaml_spec = yaml.dump(spec).encode()
-    subprocess.run(["kubectl", "apply", "-f", "-"], input=yaml_spec)
+    # For each cluster
+    # TODO: implement some target cluster filtering
+    for cluster in CLUSTERS:
+        cluster_kube_config = KUBE_CONTEXTS[cluster]
+        subprocess.run(
+            [
+                "kubectl",
+                "--context",
+                cluster_kube_config,
+                "delete",
+                "pod",
+                spec["metadata"]["name"],
+            ]
+        )
+        yaml_spec = yaml.dump(spec).encode()
+        subprocess.run(
+            ["kubectl", "--context", cluster_kube_config, "apply", "-f", "-"],
+            input=yaml_spec,
+        )
 
 
 @click.command()
