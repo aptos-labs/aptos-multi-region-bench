@@ -5,6 +5,8 @@ from typing import List, Optional, Sequence, Tuple, TypedDict
 
 import click
 import yaml
+from cluster import get_validator_fullnode_hosts
+from constants import CLUSTERS
 
 
 class Metadata(TypedDict):
@@ -45,7 +47,7 @@ def build_pod_template() -> PodTemplate:
             "containers": [
                 {
                     "name": "loadtest",
-                    "image": "aptoslabs/tools:mainnet",
+                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:mainnet",
                     "env": [
                         {
                             "name": "RUST_BACKTRACE",
@@ -57,6 +59,18 @@ def build_pod_template() -> PodTemplate:
                         },
                     ],
                     "command": [],
+                    # sufficient resource utilization such that the txn-emitter
+                    # is not the bottleneck
+                    "resources": {
+                        "requests": {
+                            "cpu": "16",
+                            "memory": "16Gi",
+                        },
+                        "limits": {
+                            "cpu": "16",
+                            "memory": "16Gi",
+                        },
+                    },
                 }
             ],
         },
@@ -88,8 +102,7 @@ def build_loadtest_command(
             else f"--mempool-backlog={loadtestConfig['mempool_backlog']}"
         ],
         f"--duration={loadtestConfig['duration']}",
-        "--txn-expiration-time-secs="
-        f"{loadtestConfig['txn_expiration_time_secs']}",
+        "--txn-expiration-time-secs=" f"{loadtestConfig['txn_expiration_time_secs']}",
     ]
 
 
@@ -98,29 +111,22 @@ def configure_loadtest(
     loadtestConfig: LoadTestConfig,
 ) -> PodTemplate:
     pod = PodTemplate(template)
-    pod["spec"]["containers"][0]["command"] = build_loadtest_command(
-        loadtestConfig
-    )
+    pod["spec"]["containers"][0]["command"] = build_loadtest_command(loadtestConfig)
     return pod
 
 
 def automatically_determine_targets() -> List[str]:
     """
     Automatically determine the targets to use for load testing.
+    TODO: implement some target filtering
     """
-    output = subprocess.check_output(["kubectl", "get", "svc", "-o", "yaml"])
-    services = yaml.safe_load(output)
     targets = []
-    for service in services["items"]:
-        # If we have ingress we can take traffic
-        ingress = (
-            service.get("status", {}).get("loadBalancer", {}).get("ingress")
-        )
-        name = service.get("metadata", {}).get("name", "")
-        if ingress and "validator" in name:
-            # Port is hardcoded for now
-            port = 80
-            targets.append(f"http://{name}:{port}")
+    for cluster in CLUSTERS:
+        validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
+        for host in validator_fullnode_hosts_cluster_list:
+            targets.append(f"http://{host.validator_host}:80")
+            targets.append(f"http://{host.fullnode_host}:80")
+
     return targets
 
 

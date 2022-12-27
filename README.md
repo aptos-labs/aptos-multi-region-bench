@@ -50,8 +50,25 @@ Wipe the network and start from scratch
 <edit aptos_node_helm_values.yaml with a new chain.era>
 
 # re-run genesis and upload to all nodes
-yes | ./bin/cluster.py genesis create  && ./bin/cluster.py genesis upload --apply
+yes | ./bin/cluster.py genesis create
+
+# to re-generate keys and re-fetch the external IPs
+yes | ./bin/cluster.py genesis create --generate-keys --set-validator-config
+
+# upload genesis configs to each node for startup
+./bin/cluster.py genesis upload --apply
 
 # upgrade all nodes (this may take a few minutes)
+# this can be done in parallel with above upload step in another terminal
 time ./bin/cluster.py helm-upgrade
+```
+
+Submit load test against the network:
+
+```
+# this root keypair is hardcoded in genesis
+./bin/loadtest.py 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19 4 --apply --target-tps 5000
+
+# more customizations can be seen here
+./bin/loadtest.py --help
 ```

@@ -12,59 +12,9 @@ import click
 import yaml
 import os
 
-from kubernetes import client, config
+from kubernetes import client
 
-
-class Cluster(Enum):
-    NA = "aptos-google-na"
-    EU = "aptos-google-europe"
-    ASIA = "aptos-google-asia"
-    ALL = "all"
-
-
-GENESIS_DIRECTORY = "genesis"
-APTOS_NODE_HELM_CHART_DIRECTORY = (
-    "submodules/aptos-core-experimental/terraform/helm/aptos-node"
-)
-APTOS_NODE_HELM_VALUES_FILE = "aptos_node_helm_values.yaml"
-
-ERA = 1
-
-GCP_PROJECT_NAME = "omega-booster-372221"
-CLUSTERS = {Cluster.NA: 16, Cluster.EU: 16, Cluster.ASIA: 18}
-KUBE_CONTEXTS = {
-    Cluster.NA: "gke_omega-booster-372221_us-west1-a_aptos-aptos-google-na",
-    Cluster.EU: "gke_omega-booster-372221_europe-west3-a_aptos-aptos-google-europe",
-    Cluster.ASIA: "gke_omega-booster-372221_asia-east1-a_aptos-aptos-google-asia",
-}
-NAMESPACE = "default"
-KUBE_CLIENTS = {}
-config.load_kube_config()
-for cluster, context in KUBE_CONTEXTS.items():
-    KUBE_CLIENTS[cluster] = config.new_client_from_config(context=context)
-
-LAYOUT = {
-    "root_key": "0x48136DF3174A3DE92AFDB375FFE116908B69FF6FAB9B1410E548A33FEA1D159D",
-    "users": [
-        f"{cluster.value}-aptos-node-{i}"
-        for cluster in CLUSTERS
-        for i in range(CLUSTERS[cluster])
-    ],
-    "chain_id": 4,  # TESTING chain_id
-    "allow_new_validators": True,
-    "epoch_duration_secs": 7200,
-    "is_test": True,
-    "min_price_per_gas_unit": 1,
-    "min_stake": 10**8 * 10**6,
-    "min_voting_threshold": 10**8 * 10**6,
-    "max_stake": 10**8 * 10**9,
-    "recurring_lockup_duration_secs": 86400,
-    "required_proposer_stake": 10**8 * 10**6,
-    "rewards_apy_percentage": 10,
-    "voting_duration_secs": 43200,
-    "voting_power_increase_limit": 20,
-}
-
+from constants import *
 
 @dataclass
 class ValidatorFullnodeHosts:
@@ -110,8 +60,8 @@ def get_validator_fullnode_hosts(
     Get the validator and fullnode hosts for the given cluster, in sorted order by their index
     """
     # get the services for each cluster
-    client = client.CoreV1Api(KUBE_CLIENTS[cluster])
-    services = client.list_namespaced_service(namespace=NAMESPACE)
+    core_client = client.CoreV1Api(KUBE_CLIENTS[cluster])
+    services = core_client.list_namespaced_service(namespace=NAMESPACE)
 
     validator_fullnode_hosts_list = []
 
@@ -175,21 +125,37 @@ def auth() -> None:
 
 
 def generate_keys_for_genesis() -> None:
+    procs: List[subprocess.Popen] = []
     for cluster, nodes_per_cluster in CLUSTERS.items():
         for i in range(nodes_per_cluster):
             node_name = f"aptos-node-{i}"
-            subprocess.run(
-                [
-                    "aptos",
-                    "genesis",
-                    "generate-keys",
-                    "--output-dir",
-                    f"{GENESIS_DIRECTORY}/{cluster.value}-{node_name}",
-                ]
+            procs.append(
+                subprocess.Popen(
+                    [
+                        "aptos",
+                        "genesis",
+                        "generate-keys",
+                        "--output-dir",
+                        f"{GENESIS_DIRECTORY}/{cluster.value}-{node_name}",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
             )
+
+    for proc in procs:
+        proc.wait()
+        if proc.returncode != 0:
+            print(f"Failed to generate keys")
+            outs, errs = proc.communicate()
+            print(outs)
+            print(errs)
+            raise SystemExit(1)
 
 
 def set_validator_configuration_for_genesis() -> None:
+    procs: List[subprocess.Popen] = []
     # get the services for each cluster
     for cluster in CLUSTERS:
         validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
@@ -197,28 +163,39 @@ def set_validator_configuration_for_genesis() -> None:
             node_index = f"aptos-node-{i}"
             node_username = f"{cluster.value}-{node_index}"
             print(f"Setting validator configuration for {node_username} via aptos CLI")
-            cp = subprocess.run(
-                [
-                    "aptos",
-                    "genesis",
-                    "set-validator-configuration",
-                    "--owner-public-identity-file",
-                    f"{GENESIS_DIRECTORY}/{node_username}/public-keys.yaml",
-                    "--local-repository-dir",
-                    GENESIS_DIRECTORY,
-                    "--username",
-                    node_username,
-                    "--validator-host",
-                    f"{hosts.validator_host}:6180",
-                    "--full-node-host",
-                    f"{hosts.fullnode_host}:6182",
-                    "--stake-amount",
-                    f"{10**8 * 10**6}",  # 1M APT in octas
-                ]
+            procs.append(
+                subprocess.Popen(
+                    [
+                        "aptos",
+                        "genesis",
+                        "set-validator-configuration",
+                        "--owner-public-identity-file",
+                        f"{GENESIS_DIRECTORY}/{node_username}/public-keys.yaml",
+                        "--local-repository-dir",
+                        GENESIS_DIRECTORY,
+                        "--username",
+                        node_username,
+                        "--validator-host",
+                        f"{hosts.validator_host}:6180",
+                        "--full-node-host",
+                        f"{hosts.fullnode_host}:6182",
+                        "--stake-amount",
+                        f"{10**8 * 10**6}",  # 1M APT in octas
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
             )
-            if cp.returncode != 0:
-                print(f"Failed to set validator configuration for {node_username}")
-                raise SystemExit(1)
+
+    for proc in procs:
+        proc.wait()
+        if proc.returncode != 0:
+            print(f"Failed to set validator configuration")
+            outs, errs = proc.communicate()
+            print(outs)
+            print(errs)
+            raise SystemExit(1)
 
 
 @main.group()
@@ -307,37 +284,53 @@ def kube_upload_genesis(
         print(f"Current era: {current_era}")
 
     # use kubectl to easily create secrets from files
+    procs: List[subprocess.Popen] = []
     for cluster, nodes_per_cluster in CLUSTERS.items():
         cluster_kube_config = KUBE_CONTEXTS[cluster]
         cluster_genesis_fd = open(f"{cluster.value}-genesis.yaml", "w")
 
         # wipe the previous eras stuff too
         clean_previous_era_secrets(cluster, current_era)
+        clean_previous_era_pvc(cluster, current_era)
 
         for i in range(nodes_per_cluster):
             node_name = f"aptos-node-{i}"
             node_username = f"{cluster.value}-{node_name}"
 
-            subprocess.run(
-                [
-                    "kubectl",
-                    "--context",
-                    cluster_kube_config,
-                    "create",
-                    "secret",
-                    "generic",
-                    f"{node_username}-genesis-e{current_era}",
-                    f"--from-file=genesis.blob={GENESIS_DIRECTORY}/genesis.blob",
-                    f"--from-file=waypoint.txt={GENESIS_DIRECTORY}/waypoint.txt",
-                    f"--from-file=validator-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-identity.yaml",
-                    f"--from-file=validator-full-node-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-full-node-identity.yaml",
-                ]
-                + (dry_run_args if not apply else []),
-                stdout=cluster_genesis_fd,
+            procs.append(
+                subprocess.Popen(
+                    [
+                        "kubectl",
+                        "--context",
+                        cluster_kube_config,
+                        "create",
+                        "secret",
+                        "generic",
+                        f"{node_username}-genesis-e{current_era}",
+                        f"--from-file=genesis.blob={GENESIS_DIRECTORY}/genesis.blob",
+                        f"--from-file=waypoint.txt={GENESIS_DIRECTORY}/waypoint.txt",
+                        f"--from-file=validator-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-identity.yaml",
+                        f"--from-file=validator-full-node-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-full-node-identity.yaml",
+                    ]
+                    + (dry_run_args if not apply else []),
+                    stdout=cluster_genesis_fd,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
             )
             cluster_genesis_fd.flush()
             cluster_genesis_fd.write(f"---\n")
             cluster_genesis_fd.flush()
+
+    # wait for everything
+    for proc in procs:
+        proc.wait()
+        if proc.returncode != 0:
+            print(f"Error uploading genesis secrets to nodes")
+            outs, errs = proc.communicate()
+            print(outs)
+            print(errs)
+            raise SystemExit(1)
 
 
 @main.command("kube")
@@ -543,10 +536,13 @@ def helm_upgrade(
 ) -> None:
     """Helm upgrade all aptos-nodes on the cluster"""
     cluster = Cluster(cluster)
-    procs = []
+    procs: List[subprocess.Popen] = []
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
+        print(
+            f"Upgrading aptos-node helm release for cluster {available_cluster.value}"
+        )
         procs.append(
             aptos_node_helm_upgrade(
                 available_cluster, helm_chart_directory, values_file
@@ -580,7 +576,7 @@ def clean_previous_era_secrets(cluster: Cluster, era: str) -> None:
                 genesis_secret_era_substring in secret.metadata.name
                 and f"{genesis_secret_era_substring}{era}" not in secret.metadata.name
             ):
-                print(f"Deleting secret {secret.metadata.name}")
+                print(f"Deleting old secret {secret.metadata.name}")
                 core_client.delete_namespaced_secret(
                     secret.metadata.name, secret.metadata.namespace
                 )
@@ -602,7 +598,7 @@ def clean_previous_era_pvc(cluster: Cluster, era: str) -> None:
                 fullnode_pvc_era_substring in pvc.metadata.name
                 and f"{fullnode_pvc_era_substring}{era}" not in pvc.metadata.name
             ):
-                print(f"Deleting PVC {pvc.metadata.name}")
+                print(f"Deleting old PVC {pvc.metadata.name}")
                 core_client.delete_namespaced_persistent_volume_claim(
                     pvc.metadata.name, pvc.metadata.namespace
                 )
