@@ -72,3 +72,10 @@ Submit load test against the network:
 # more customizations can be seen here
 ./bin/loadtest.py --help
 ```
+
+Individual GKE cluster auth:
+* Multi-region k8s testnet
+  * EU: `gcloud container clusters get-credentials aptos-aptos-google-europe --zone europe-west3-a --project omega-booster-372221`
+  * ASIA: `gcloud container clusters get-credentials aptos-aptos-google-asia --zone asia-east1-a --project omega-booster-372221`
+  * NA: `gcloud container clusters get-credentials aptos-aptos-google-na --zone us-west1-a --project omega-booster-372221`
+* Single-region k8s testnet: `gcloud container clusters get-credentials aptos-aptos-google --zone us-central1-c --project omega-booster-372221`
