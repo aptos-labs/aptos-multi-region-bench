@@ -130,7 +130,8 @@ def automatically_determine_targets() -> List[str]:
     return targets
 
 
-def apply_spec(spec: PodTemplate) -> None:
+def apply_spec(spec: PodTemplate, delete=False) -> None:
+    """Delete the existing loadtest pod and apply the new spec. If delete=True, then just do the delete"""
     # For each cluster
     # TODO: implement some target cluster filtering
     procs: List[subprocess.Popen] = []
@@ -151,6 +152,8 @@ def apply_spec(spec: PodTemplate) -> None:
                 text=True,
             )
         )
+        if delete:
+            continue
         yaml_spec = yaml.dump(spec).encode()
         procs.append(
             subprocess.Popen(
@@ -209,6 +212,12 @@ def apply_spec(spec: PodTemplate) -> None:
     default=False,
     show_default=True,
 )
+@click.option(
+    "--delete",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
 def main(
     mint_key: str,
     chain_id: str,
@@ -218,6 +227,7 @@ def main(
     txn_expiration_time_secs: int,
     target: Tuple[str],
     apply: bool,
+    delete: bool,
 ) -> None:
     """
     Generate a pod spec for load testing.
@@ -228,6 +238,7 @@ def main(
         chain_id - Chain id of the network to test
         target   - Target must be in the format of a url: http://<host>:<port>
         --apply  - Apply the generated pod spec to the cluster
+        --delete - Delete the existing loadtest pods
     """
     template = build_pod_template()
 
@@ -241,8 +252,8 @@ def main(
         "txn_expiration_time_secs": txn_expiration_time_secs,
     }
     spec = configure_loadtest(template, config)
-    if apply:
-        apply_spec(spec)
+    if apply or delete:
+        apply_spec(spec, delete=delete)
     else:
         print(yaml.dump(spec))
 
