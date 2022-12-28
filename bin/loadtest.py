@@ -133,23 +133,44 @@ def automatically_determine_targets() -> List[str]:
 def apply_spec(spec: PodTemplate) -> None:
     # For each cluster
     # TODO: implement some target cluster filtering
+    procs: List[subprocess.Popen] = []
     for cluster in CLUSTERS:
         cluster_kube_config = KUBE_CONTEXTS[cluster]
-        subprocess.run(
-            [
-                "kubectl",
-                "--context",
-                cluster_kube_config,
-                "delete",
-                "pod",
-                spec["metadata"]["name"],
-            ]
+        procs.append(
+            subprocess.Popen(
+                [
+                    "kubectl",
+                    "--context",
+                    cluster_kube_config,
+                    "delete",
+                    "pod",
+                    spec["metadata"]["name"],
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
         )
         yaml_spec = yaml.dump(spec).encode()
-        subprocess.run(
-            ["kubectl", "--context", cluster_kube_config, "apply", "-f", "-"],
-            input=yaml_spec,
+        procs.append(
+            subprocess.Popen(
+                ["kubectl", "--context", cluster_kube_config, "apply", "-f", "-"],
+                input=yaml_spec,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
         )
+
+    # wait for everything
+    for proc in procs:
+        proc.wait()
+        if proc.returncode != 0:
+            print(f"Error starting loadtest")
+            outs, errs = proc.communicate()
+            print(outs)
+            print(errs)
+            raise SystemExit(1)
 
 
 @click.command()
