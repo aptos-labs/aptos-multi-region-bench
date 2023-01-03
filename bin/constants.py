@@ -4,7 +4,8 @@ from kubernetes import config
 
 class Cluster(Enum):
     NA = "aptos-google-na"
-    EU = "aptos-google-europe"
+    # EU = "aptos-google-europe"
+    EU2 = "aptos-google-europe2"
     ASIA = "aptos-google-asia"
     ALL = "all"
 
@@ -15,14 +16,13 @@ APTOS_NODE_HELM_CHART_DIRECTORY = (
 )
 APTOS_NODE_HELM_VALUES_FILE = "aptos_node_helm_values.yaml"
 
-ERA = 1
-
 GCP_PROJECT_NAME = "omega-booster-372221"
-# CLUSTERS = {Cluster.NA: 16, Cluster.EU: 16, Cluster.ASIA: 18}
-CLUSTERS = {Cluster.NA: 5, Cluster.EU: 5, Cluster.ASIA: 6}
+CLUSTERS = {Cluster.NA: 16, Cluster.EU2: 16, Cluster.ASIA: 18}
+# CLUSTERS = {Cluster.NA: 5, Cluster.EU: 5, Cluster.ASIA: 6} # smaller cluster configuration for testing
 KUBE_CONTEXTS = {
     Cluster.NA: "gke_omega-booster-372221_us-west1-a_aptos-aptos-google-na",
-    Cluster.EU: "gke_omega-booster-372221_europe-west3-a_aptos-aptos-google-europe",
+    # Cluster.EU: "gke_omega-booster-372221_europe-west3-a_aptos-aptos-google-europe", # this region does not have enough resources
+    Cluster.EU2: "gke_omega-booster-372221_europe-west2-a_aptos-aptos-google-europe2",
     Cluster.ASIA: "gke_omega-booster-372221_asia-east1-a_aptos-aptos-google-asia",
 }
 NAMESPACE = "default"

@@ -16,6 +16,7 @@ from kubernetes import client
 
 from constants import *
 
+
 @dataclass
 class ValidatorFullnodeHosts:
     validator_host: str
@@ -365,6 +366,56 @@ def kube_commands(
         print()
 
 
+@main.command("helm")
+@click.argument("args", nargs=-1)
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
+@click.option(
+    "--values-file",
+    "-f",
+    type=click.Path(exists=True),
+    help="Path to the values file to use",
+    required=True,
+    default=APTOS_NODE_HELM_VALUES_FILE,
+)
+@click.option(
+    "--helm-chart-directory",
+    "-d",
+    type=click.Path(exists=True),
+    help="Path to the helm chart directory",
+    default=APTOS_NODE_HELM_CHART_DIRECTORY,
+)
+def helm_commands(
+    args: Tuple[str, ...],
+    cluster: str,
+    values_file: str,
+    helm_chart_directory: str,
+) -> None:
+    """Run helm commands on the selected cluster(s)"""
+    cluster = Cluster(cluster)
+    args = " ".join(args).split()
+    print(args)
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster and cluster != Cluster.ALL:
+            continue
+        cluster_kube_config = KUBE_CONTEXTS[available_cluster]
+        num_nodes = CLUSTERS[available_cluster]
+        print(f"=== {available_cluster.value} ===")
+        subprocess.run(
+            [
+                "helm",
+                "--kube-context",
+                cluster_kube_config,
+                *args,
+            ],
+        )
+        print()
+
+
 def patch_node_scale(
     cluster: Cluster,
     node_name: str,
@@ -405,7 +456,7 @@ def patch_node_scale(
     default=Cluster.ALL.value,
     help="Cluster to run the command on",
 )
-def kube_commands(
+def kube_stop(
     cluster: str,
 ) -> None:
     """Stop all compute on the cluster"""
@@ -425,7 +476,7 @@ def kube_commands(
     default=Cluster.ALL.value,
     help="Cluster to run the command on",
 )
-def kube_commands(
+def kube_start(
     cluster: str,
 ) -> None:
     """Start all compute on the cluster"""
