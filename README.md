@@ -19,9 +19,38 @@ By default it just prints the pod output, use --apply to actually create the pod
 ## Multi-region setup
 
 Google Cloud Inter-Region Latency and Throughput: [link](https://datastudio.google.com/u/0/reporting/fc733b10-9744-4a72-a502-92290f608571/page/70YCB)
-* us-west1
-* europe-west3
-* asia-east1
+* asia-east1 -- Taiwan
+* europe-west4 -- Netherlands
+* us-west1 -- Oregon
+
+### Raw data
+
+The below latency and throughput stats were pulled from [Google Cloud Inter-Region Latency and Throughput](https://datastudio.google.com/u/0/reporting/fc733b10-9744-4a72-a502-92290f608571/page/70YCB). Raw filtered CSV can be found in the `./data` directory.
+
+Latency (snapshot Dec 5, 2022 - Jan 3, 2023):
+
+|sending_region|receiving_region|milliseconds|
+|--------------|----------------|------------|
+|asia-east1    |europe-west4    |251.794     |
+|asia-east1    |us-west1        |118.553     |
+|europe-west4  |asia-east1      |251.777     |
+|europe-west4  |us-west1        |133.412     |
+|us-west1      |asia-east1      |118.541     |
+|us-west1      |europe-west4    |133.435     |
+
+
+Throughput (snapshot Dec 5, 2022 - Jan 3, 2023):
+
+|sending_region|receiving_region|Gbits/sec|
+|--------------|----------------|---------|
+|asia-east1    |europe-west4    |9.344    |
+|asia-east1    |us-west1        |9.811    |
+|europe-west4  |asia-east1      |9.326    |
+|europe-west4  |us-west1        |9.815    |
+|us-west1      |asia-east1      |9.802    |
+|us-west1      |europe-west4    |9.778    |
+
+
 
 ## Env setup
 
