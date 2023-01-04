@@ -6,7 +6,7 @@ from typing import List, Optional, Sequence, Tuple, TypedDict
 import click
 import yaml
 from cluster import get_validator_fullnode_hosts
-from constants import CLUSTERS, KUBE_CONTEXTS
+from constants import CLUSTERS, KUBE_CONTEXTS, LOADTEST_POD_SPEC, LOADTEST_POD_NAME
 
 
 class Metadata(TypedDict):
@@ -41,12 +41,12 @@ def build_pod_template() -> PodTemplate:
         "apiVersion": "v1",
         "kind": "Pod",
         "metadata": {
-            "name": "loadtest",
+            "name": LOADTEST_POD_NAME,
         },
         "spec": {
             "containers": [
                 {
-                    "name": "loadtest",
+                    "name": LOADTEST_POD_NAME,
                     "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:mainnet",
                     "env": [
                         {
@@ -130,7 +130,7 @@ def automatically_determine_targets() -> List[str]:
     return targets
 
 
-def apply_spec(spec: PodTemplate, delete=False) -> None:
+def apply_spec(delete=False) -> None:
     """Delete the existing loadtest pod and apply the new spec. If delete=True, then just do the delete"""
     # For each cluster
     # TODO: implement some target cluster filtering
@@ -145,7 +145,9 @@ def apply_spec(spec: PodTemplate, delete=False) -> None:
                     cluster_kube_config,
                     "delete",
                     "pod",
-                    spec["metadata"]["name"],
+                    LOADTEST_POD_NAME,
+                    "--ignore-not-found",
+                    "--force",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -154,11 +156,16 @@ def apply_spec(spec: PodTemplate, delete=False) -> None:
         )
         if delete:
             continue
-        yaml_spec = yaml.dump(spec).encode()
         procs.append(
             subprocess.Popen(
-                ["kubectl", "--context", cluster_kube_config, "apply", "-f", "-"],
-                input=yaml_spec,
+                [
+                    "kubectl",
+                    "--context",
+                    cluster_kube_config,
+                    "apply",
+                    "-f",
+                    LOADTEST_POD_SPEC,
+                ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -252,8 +259,10 @@ def main(
         "txn_expiration_time_secs": txn_expiration_time_secs,
     }
     spec = configure_loadtest(template, config)
+    with open(LOADTEST_POD_SPEC, "w") as f:
+        f.write(yaml.dump(spec))
     if apply or delete:
-        apply_spec(spec, delete=delete)
+        apply_spec(delete=delete)
     else:
         print(yaml.dump(spec))
 

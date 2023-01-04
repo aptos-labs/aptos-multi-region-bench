@@ -5,7 +5,8 @@ from kubernetes import config
 class Cluster(Enum):
     NA = "aptos-google-na"
     # EU = "aptos-google-europe"
-    EU2 = "aptos-google-europe2"
+    # EU2 = "aptos-google-europe2"
+    EU4 = "aptos-google-europe"
     ASIA = "aptos-google-asia"
     ALL = "all"
 
@@ -17,12 +18,13 @@ APTOS_NODE_HELM_CHART_DIRECTORY = (
 APTOS_NODE_HELM_VALUES_FILE = "aptos_node_helm_values.yaml"
 
 GCP_PROJECT_NAME = "omega-booster-372221"
-CLUSTERS = {Cluster.NA: 16, Cluster.EU2: 16, Cluster.ASIA: 18}
+CLUSTERS = {Cluster.NA: 16, Cluster.EU4: 16, Cluster.ASIA: 18}
 # CLUSTERS = {Cluster.NA: 5, Cluster.EU: 5, Cluster.ASIA: 6} # smaller cluster configuration for testing
 KUBE_CONTEXTS = {
     Cluster.NA: "gke_omega-booster-372221_us-west1-a_aptos-aptos-google-na",
     # Cluster.EU: "gke_omega-booster-372221_europe-west3-a_aptos-aptos-google-europe", # this region does not have enough resources
-    Cluster.EU2: "gke_omega-booster-372221_europe-west2-a_aptos-aptos-google-europe2",
+    # Cluster.EU2: "gke_omega-booster-372221_europe-west2-a_aptos-aptos-google-europe2", # this region does not have T2D
+    Cluster.EU4: "gke_omega-booster-372221_europe-west4-a_aptos-aptos-google-europe4",
     Cluster.ASIA: "gke_omega-booster-372221_asia-east1-a_aptos-aptos-google-asia",
 }
 NAMESPACE = "default"
@@ -54,3 +56,7 @@ LAYOUT = {
     "voting_duration_secs": 43200,
     "voting_power_increase_limit": 20,
 }
+
+# load test
+LOADTEST_POD_SPEC = "loadtest.yaml"
+LOADTEST_POD_NAME = "loadtest"

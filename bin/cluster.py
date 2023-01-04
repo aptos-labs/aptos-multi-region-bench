@@ -207,14 +207,6 @@ def genesis() -> None:
     pass
 
 
-@main.group()
-def kube() -> None:
-    """
-    Run kube commands across all clusters
-    """
-    pass
-
-
 @genesis.command("create")
 @click.option(
     "--generate-keys",
@@ -286,17 +278,35 @@ def kube_upload_genesis(
 
     # use kubectl to easily create secrets from files
     procs: List[subprocess.Popen] = []
-    for cluster, nodes_per_cluster in CLUSTERS.items():
-        cluster_kube_config = KUBE_CONTEXTS[cluster]
-        cluster_genesis_fd = open(f"{cluster.value}-genesis.yaml", "w")
+    for available_cluster, nodes_per_cluster in CLUSTERS.items():
+
+        cluster_kube_config = KUBE_CONTEXTS[available_cluster]
+        cluster_genesis_fd = open(f"{available_cluster.value}-genesis.yaml", "w")
 
         # wipe the previous eras stuff too
-        clean_previous_era_secrets(cluster, current_era)
-        clean_previous_era_pvc(cluster, current_era)
+        clean_previous_era_secrets(available_cluster, current_era)
+        clean_previous_era_pvc(available_cluster, current_era)
 
         for i in range(nodes_per_cluster):
             node_name = f"aptos-node-{i}"
-            node_username = f"{cluster.value}-{node_name}"
+            node_username = f"{available_cluster.value}-{node_name}"
+
+            # delete if found in apply mode
+            if apply:
+                subprocess.run(
+                    [
+                        "kubectl",
+                        "--context",
+                        cluster_kube_config,
+                        "delete",
+                        "secret",
+                        f"{node_username}-genesis-e{current_era}",
+                        "--ignore-not-found",
+                    ],
+                    stdout=cluster_genesis_fd,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
 
             procs.append(
                 subprocess.Popen(
@@ -374,26 +384,9 @@ def kube_commands(
     default=Cluster.ALL.value,
     help="Cluster to run the command on",
 )
-@click.option(
-    "--values-file",
-    "-f",
-    type=click.Path(exists=True),
-    help="Path to the values file to use",
-    required=True,
-    default=APTOS_NODE_HELM_VALUES_FILE,
-)
-@click.option(
-    "--helm-chart-directory",
-    "-d",
-    type=click.Path(exists=True),
-    help="Path to the helm chart directory",
-    default=APTOS_NODE_HELM_CHART_DIRECTORY,
-)
 def helm_commands(
     args: Tuple[str, ...],
     cluster: str,
-    values_file: str,
-    helm_chart_directory: str,
 ) -> None:
     """Run helm commands on the selected cluster(s)"""
     cluster = Cluster(cluster)
@@ -655,6 +648,29 @@ def clean_previous_era_pvc(cluster: Cluster, era: str) -> None:
                 )
 
 
+def clean_previous_era_stateful_set(cluster: Cluster, era: str) -> None:
+    """
+    Clean up previous era stateful sets from the given cluster
+    """
+    fullnode_stateful_set_era_substring = "fullnode-e"
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster and cluster != Cluster.ALL:
+            continue
+        apps_client = client.AppsV1Api(KUBE_CLIENTS[available_cluster])
+        stateful_sets = apps_client.list_namespaced_stateful_set(NAMESPACE)
+        for stateful_set in stateful_sets.items:
+            # if the stateful_set has an era in the name and is not the current era, delete it
+            if (
+                fullnode_stateful_set_era_substring in stateful_set.metadata.name
+                and f"{fullnode_stateful_set_era_substring}{era}"
+                not in stateful_set.metadata.name
+            ):
+                print(f"Deleting old stateful_set {stateful_set.metadata.name}")
+                apps_client.delete_namespaced_stateful_set(
+                    stateful_set.metadata.name, stateful_set.metadata.namespace
+                )
+
+
 @main.command("era-clean")
 @click.option(
     "--cluster",
@@ -676,6 +692,7 @@ def clean_previous_era_resources(cluster: str, era: str) -> None:
     cluster = Cluster(cluster)
     clean_previous_era_secrets(cluster, era)
     clean_previous_era_pvc(cluster, era)
+    clean_previous_era_stateful_set(cluster, era)
 
 
 if __name__ == "__main__":
