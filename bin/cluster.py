@@ -61,7 +61,7 @@ def get_validator_fullnode_hosts(
     Get the validator and fullnode hosts for the given cluster, in sorted order by their index
     """
     # get the services for each cluster
-    core_client = client.CoreV1Api(KUBE_CLIENTS[cluster])
+    core_client = client.CoreV1Api(kube_clients()[cluster])
     services = core_client.list_namespaced_service(namespace=NAMESPACE)
 
     validator_fullnode_hosts_list = []
@@ -417,7 +417,7 @@ def patch_node_scale(
     """
     Patch the node count for the given node
     """
-    apps_client = client.AppsV1Api(KUBE_CLIENTS[cluster])
+    apps_client = client.AppsV1Api(kube_clients()[cluster])
     long_node_name = f"{cluster.value}-{node_name}"
     validator_sts_prefix = f"{long_node_name}-validator"
     fullnode_sts_prefix = f"{long_node_name}-fullnode-e"
@@ -612,7 +612,7 @@ def clean_previous_era_secrets(cluster: Cluster, era: str) -> None:
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
-        core_client = client.CoreV1Api(KUBE_CLIENTS[available_cluster])
+        core_client = client.CoreV1Api(kube_clients()[available_cluster])
         secrets = core_client.list_namespaced_secret(NAMESPACE)
         for secret in secrets.items:
             # if the secret has an era in the name and is not the current era, delete it
@@ -634,7 +634,7 @@ def clean_previous_era_pvc(cluster: Cluster, era: str) -> None:
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
-        core_client = client.CoreV1Api(KUBE_CLIENTS[available_cluster])
+        core_client = client.CoreV1Api(kube_clients()[available_cluster])
         pvcs = core_client.list_namespaced_persistent_volume_claim(NAMESPACE)
         for pvc in pvcs.items:
             # if the PVC has an era in the name and is not the current era, delete it
@@ -656,7 +656,7 @@ def clean_previous_era_stateful_set(cluster: Cluster, era: str) -> None:
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
-        apps_client = client.AppsV1Api(KUBE_CLIENTS[available_cluster])
+        apps_client = client.AppsV1Api(kube_clients()[available_cluster])
         stateful_sets = apps_client.list_namespaced_stateful_set(NAMESPACE)
         for stateful_set in stateful_sets.items:
             # if the stateful_set has an era in the name and is not the current era, delete it

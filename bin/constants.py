@@ -1,5 +1,6 @@
 from enum import Enum
-from kubernetes import config
+from typing import Dict
+from kubernetes import config, client
 
 
 class Cluster(Enum):
@@ -28,10 +29,6 @@ KUBE_CONTEXTS = {
     Cluster.ASIA: "gke_omega-booster-372221_asia-east1-a_aptos-aptos-google-asia",
 }
 NAMESPACE = "default"
-KUBE_CLIENTS = {}
-config.load_kube_config()
-for cluster, context in KUBE_CONTEXTS.items():
-    KUBE_CLIENTS[cluster] = config.new_client_from_config(context=context)
 
 LAYOUT = {
     # This is the same testing key as in forge: https://github.com/aptos-labs/aptos-core/blob/main/testsuite/forge/src/backend/k8s/constants.rs#L7-L10
@@ -60,3 +57,11 @@ LAYOUT = {
 # load test
 LOADTEST_POD_SPEC = "loadtest.yaml"
 LOADTEST_POD_NAME = "loadtest"
+
+# clients generation
+def kube_clients() -> Dict[Cluster, client.ApiClient]:
+    clients = {}
+    config.load_kube_config()
+    for cluster, context in KUBE_CONTEXTS.items():
+        clients[cluster] = config.new_client_from_config(context=context)
+    return clients
