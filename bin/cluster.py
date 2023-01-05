@@ -631,21 +631,23 @@ def clean_previous_era_pvc(cluster: Cluster, era: str) -> None:
     Clean up previous era PVCs from the given cluster
     """
     fullnode_pvc_era_substring = "fullnode-e"
+    validator_pvc_era_substring = "validator-e"
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
-        core_client = client.CoreV1Api(kube_clients()[available_cluster])
-        pvcs = core_client.list_namespaced_persistent_volume_claim(NAMESPACE)
-        for pvc in pvcs.items:
-            # if the PVC has an era in the name and is not the current era, delete it
-            if (
-                fullnode_pvc_era_substring in pvc.metadata.name
-                and f"{fullnode_pvc_era_substring}{era}" not in pvc.metadata.name
-            ):
-                print(f"Deleting old PVC {pvc.metadata.name}")
-                core_client.delete_namespaced_persistent_volume_claim(
-                    pvc.metadata.name, pvc.metadata.namespace
-                )
+        for pvc_substring in [fullnode_pvc_era_substring, validator_pvc_era_substring]:
+            core_client = client.CoreV1Api(kube_clients()[available_cluster])
+            pvcs = core_client.list_namespaced_persistent_volume_claim(NAMESPACE)
+            for pvc in pvcs.items:
+                # if the PVC has an era in the name and is not the current era, delete it
+                if (
+                    pvc_substring in pvc.metadata.name
+                    and f"{pvc_substring}{era}" not in pvc.metadata.name
+                ):
+                    print(f"Deleting old PVC {pvc.metadata.name}")
+                    core_client.delete_namespaced_persistent_volume_claim(
+                        pvc.metadata.name, pvc.metadata.namespace
+                    )
 
 
 def clean_previous_era_stateful_set(cluster: Cluster, era: str) -> None:
