@@ -71,14 +71,14 @@ Submit load test against the network. The root keypair is hardcoded in genesis. 
 
 ### `cluster.py`
 
-Spin up or down compute, e.g. to save cost by going idle
+#### Spin up or down compute, e.g. to save cost by going idle
 
 ```
 ./bin/cluster.py start
 ./bin/cluster.py stop
 ```
 
-Wipe the network and start from scratch
+#### Wipe the network and start from scratch
 
 ```
 # 1. Changing the chain's era wipes all storage and tells the system to start from scratch
@@ -99,16 +99,31 @@ yes | ./bin/cluster.py genesis create --set-validator-config
 time ./bin/cluster.py helm-upgrade
 ```
 
+#### Changing the network size (and starting a new network)
+* Edit `CLUSTERS` in `constants.py` to change the number of validators (and VFNs) in each region. Please note the quota
+* Follow above instructions to re-run genesis and wipe the chain.
+
+#### Changing the node deployment configuration
+Each node is deployed via `helm` on each cluster. The configuration is controlled by helm values in the file: `aptos_node_helm_values.yaml`. Documentation on which values are available to configure can be found in aptos-core: https://github.com/aptos-labs/aptos-core/tree/main/terraform/helm/aptos-node
+
+For example:
+* `imageTag` -- change the image for each validator and VFN
+* `chain.era` -- change the chain era and wipe storage
+* `validator.config` -- override the [NodeConfig](https://github.com/aptos-labs/aptos-core/blob/main/config/src/config/mod.rs#L63-L98) as YAML, such as tuning execution, consensus, state sync, etc
+
 ### Misc
 
-Grab the latest aptos-framework for genesis
+#### Grab the latest aptos-framework for genesis
 
 ```
 docker run -it aptoslabs/tools:${IMAGE_TAG} bash
 docker cp `docker container ls | grep tools:${IMAGE_TAG} | awk '{print $1}'`:/aptos-framework/move/head.mrb genesis/framework.mrb 
 ```
 
-Individual GKE cluster auth:
+#### Individual GKE cluster auth
+
+`./bin/cluster.py auth` authencates across all clusters, but you make want to use the below commands to authenticate and change your kube context manually for each cluster.
+
 * Multi-region k8s testnet
   * EU: `gcloud container clusters get-credentials aptos-aptos-google-europe2 --zone europe-west2-a --project omega-booster-372221`
     * Due to quota limitations, we have a standby cluster in europe-west3a with less quota: `gcloud container clusters get-credentials aptos-aptos-google-europe --zone europe-west3-a --project omega-booster-372221`
