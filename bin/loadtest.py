@@ -126,7 +126,7 @@ def automatically_determine_targets() -> List[str]:
     for cluster in CLUSTERS:
         validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
         for host in validator_fullnode_hosts_cluster_list:
-            targets.append(f"http://{host.validator_host}:80")
+            # targets.append(f"http://{host.validator_host}:80")
             targets.append(f"http://{host.fullnode_host}:80")
 
     return targets
