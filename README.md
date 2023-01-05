@@ -1,20 +1,8 @@
-# Load Test Setup for Google!
+# Aptos Benchmark Setup for Google
 
-## Testnets
-
-terraform/aptos-google - single region testnet
-
-terraform/aptos-google-{asia,na,europe} - all part of multi region testnet
-
-## Scripts
-
-bin/loadtest.py - little loadtest utility.
-bin/cluster.py - cluster management utility. Creates genesis, and manages nodes lifecycle
-
-This creates a loadtest pod in the current cluster
-
-By default it just prints the pod output, use --apply to actually create the pod
-
+This repo contains deployment configurations, operational scripts, and benchmarks for two Aptos testnets:
+* terraform/aptos-google - Single region testnet
+* terraform/aptos-google-{asia,na,europe*} - All part of multi region testnet. Each region is deployed separately
 
 ## Multi-region setup
 
@@ -50,21 +38,38 @@ Throughput (snapshot Dec 5, 2022 - Jan 3, 2023):
 |us-west1      |asia-east1      |9.802    |
 |us-west1      |europe-west4    |9.778    |
 
-
-
 ## Env setup
 
-* Login: `gcloud auth login --update-adc`
-* Set gcloud project: `gcloud config set project omega-booster-372221`
+```
+# Set up GCP access
+gcloud auth login --update-adc
+gcloud config set project omega-booster-372221
 
-## Helpful commands
+# This step authenticates with all GKE clusters
+./bin/cluster.py auth
+```
 
-Grab the latest aptos-framework for genesis
+## Scripts
+
+`bin/loadtest.py` - little loadtest utility.
+`bin/cluster.py` - cluster management utility. Creates genesis, and manages nodes lifecycle
+
+### `loadtest.py`
+
+Submit load test against the network. The root keypair is hardcoded in genesis. The below commands show some cutomization options for the loadtest utility.
 
 ```
-docker run -it aptoslabs/tools:${IMAGE_TAG} bash
-docker cp `docker container ls | grep tools:${IMAGE_TAG} | awk '{print $1}'`:/aptos-framework/move/head.mrb genesis/framework.mrb 
+# apply a loadtest with a constant target TPS
+./bin/loadtest.py 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19 4 --apply --target-tps 5000
+
+# apply a loadtest with mempool backlog 50,000 for 1 hour
+./bin/loadtest.py 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19 4 --apply --duration 3600 --mempool-backlog 50000
+
+# more customizations can be seen here
+./bin/loadtest.py --help
 ```
+
+### `cluster.py`
 
 Spin up or down compute, e.g. to save cost by going idle
 
@@ -76,30 +81,31 @@ Spin up or down compute, e.g. to save cost by going idle
 Wipe the network and start from scratch
 
 ```
+# 1. Changing the chain's era wipes all storage and tells the system to start from scratch
 <edit aptos_node_helm_values.yaml with a new chain.era>
 
-# re-run genesis and upload to all nodes
-yes | ./bin/cluster.py genesis create
+# 2. Re-run genesis and set all validator configs. You have a few options here
 
-# to re-generate keys and re-fetch the external IPs
+# a. re-generate keys and re-fetch the external IPs for validator config
 yes | ./bin/cluster.py genesis create --generate-keys --set-validator-config
+# b. to set validator config without generating new keys
+yes | ./bin/cluster.py genesis create --set-validator-config
 
-# upload genesis configs to each node for startup
+# 3. Upload genesis configs to each node for startup
 ./bin/cluster.py genesis upload --apply
 
-# upgrade all nodes (this may take a few minutes)
+# 4. Upgrade all nodes (this may take a few minutes)
 # this can be done in parallel with above upload step in another terminal
 time ./bin/cluster.py helm-upgrade
 ```
 
-Submit load test against the network:
+### Misc
+
+Grab the latest aptos-framework for genesis
 
 ```
-# this root keypair is hardcoded in genesis
-./bin/loadtest.py 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19 4 --apply --target-tps 5000
-
-# more customizations can be seen here
-./bin/loadtest.py --help
+docker run -it aptoslabs/tools:${IMAGE_TAG} bash
+docker cp `docker container ls | grep tools:${IMAGE_TAG} | awk '{print $1}'`:/aptos-framework/move/head.mrb genesis/framework.mrb 
 ```
 
 Individual GKE cluster auth:
