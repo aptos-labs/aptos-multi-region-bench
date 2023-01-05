@@ -1,7 +1,7 @@
 chain:
   chain_id: TESTING
   chain_name: aptos-google
-  era: 25
+  era: 28
 chart_sha1: 2a472f76b1124a57172a902029640f1f3a01e902
 fullnode:
   affinity:
@@ -33,7 +33,7 @@ fullnode:
       memory: 32Gi
   storage:
     class: ssd
-    size: 1000Gi
+    size: 2500Gi
 
 imageTag: performance_81e60a72b56dba7fdfa357876bd85ac3d0093ae1
 
@@ -67,4 +67,4 @@ validator:
       memory: 32Gi
   storage:
     class: ssd
-    size: 1000Gi
+    size: 2500Gi

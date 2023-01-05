@@ -7,7 +7,7 @@ terraform {
 }
 
 locals {
-  region  = "europe-west3"
+  region  = "europe-west4"
   zone    = "a"
   project = "omega-booster-372221"
 
@@ -72,7 +72,10 @@ module "aptos-node" {
   zone    = local.zone    # Specify the zone suffix
   project = local.project # Specify your GCP project name
 
-  validator_name = "aptos-google-europe-nodes"
+  validator_name = "aptos-google-europe-4-nodes"
+
+  # NOTE: since the workspace name has the region number in it for this europe cluster, we need to override the release name
+  helm_release_name_override = "aptos-google-europe"
 
   # for naming purposes to avoid name collisions
   chain_name          = "aptos-google"
