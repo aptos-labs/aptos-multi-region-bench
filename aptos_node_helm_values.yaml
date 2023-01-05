@@ -33,7 +33,7 @@ fullnode:
       memory: 32Gi
   storage:
     class: ssd
-    size: 200Gi
+    size: 1000Gi
 
 imageTag: performance_81e60a72b56dba7fdfa357876bd85ac3d0093ae1
 
@@ -67,4 +67,4 @@ validator:
       memory: 32Gi
   storage:
     class: ssd
-    size: 200Gi
+    size: 1000Gi
