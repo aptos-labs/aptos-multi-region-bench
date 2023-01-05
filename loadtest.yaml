@@ -126,3 +126,4 @@ spec:
       requests:
         cpu: '16'
         memory: 16Gi
+  restartPolicy: Never

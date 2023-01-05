@@ -4,6 +4,7 @@ import subprocess
 from typing import List, Optional, Sequence, Tuple, TypedDict
 
 import click
+import os
 import yaml
 from cluster import get_validator_fullnode_hosts
 from constants import CLUSTERS, KUBE_CONTEXTS, LOADTEST_POD_SPEC, LOADTEST_POD_NAME
@@ -44,6 +45,7 @@ def build_pod_template() -> PodTemplate:
             "name": LOADTEST_POD_NAME,
         },
         "spec": {
+            "restartPolicy": "Never",
             "containers": [
                 {
                     "name": LOADTEST_POD_NAME,
@@ -136,6 +138,7 @@ def apply_spec(delete=False) -> None:
     # TODO: implement some target cluster filtering
     procs: List[subprocess.Popen] = []
     for cluster in CLUSTERS:
+        print(f"Applying loadtest spec to {cluster}...")
         cluster_kube_config = KUBE_CONTEXTS[cluster]
         procs.append(
             subprocess.Popen(
@@ -171,6 +174,7 @@ def apply_spec(delete=False) -> None:
                 text=True,
             )
         )
+    print("Waiting for kubectl to finish...")
 
     # wait for everything
     for proc in procs:
@@ -181,6 +185,19 @@ def apply_spec(delete=False) -> None:
             print(outs)
             print(errs)
             raise SystemExit(1)
+
+    print("Done! Printing loadtest pod status...")
+    print("$ ./bin/cluster.py kube get pods loadtest")
+    print()
+    subprocess.run(
+        [
+            "./bin/cluster.py",  # ensure this is run from project root
+            "kube",
+            "get",
+            "pods",
+            "loadtest",
+        ],
+    )
 
 
 @click.command()
@@ -261,6 +278,7 @@ def main(
     spec = configure_loadtest(template, config)
     with open(LOADTEST_POD_SPEC, "w") as f:
         f.write(yaml.dump(spec))
+        print(f"Wrote pod spec to {LOADTEST_POD_SPEC}")
     if apply or delete:
         apply_spec(delete=delete)
     else:
