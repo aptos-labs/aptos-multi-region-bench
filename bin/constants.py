@@ -57,6 +57,7 @@ LAYOUT = {
 # load test
 LOADTEST_POD_SPEC = "loadtest.yaml"
 LOADTEST_POD_NAME = "loadtest"
+LOADTEST_CLUSTERS = [Cluster.ASIA]
 
 # clients generation
 def kube_clients() -> Dict[Cluster, client.ApiClient]:

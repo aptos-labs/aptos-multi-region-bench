@@ -7,7 +7,7 @@ import click
 import os
 import yaml
 from cluster import get_validator_fullnode_hosts
-from constants import CLUSTERS, KUBE_CONTEXTS, LOADTEST_POD_SPEC, LOADTEST_POD_NAME
+from constants import CLUSTERS, KUBE_CONTEXTS, LOADTEST_POD_SPEC, LOADTEST_POD_NAME, LOADTEST_CLUSTERS
 
 
 class Metadata(TypedDict):
@@ -49,7 +49,7 @@ def build_pod_template() -> PodTemplate:
             "containers": [
                 {
                     "name": LOADTEST_POD_NAME,
-                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:mainnet",
+                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:d49b4c2dadb6f4f44e9890b921fd2fa3aa044b1b",
                     "env": [
                         {
                             "name": "RUST_BACKTRACE",
@@ -93,7 +93,7 @@ def build_loadtest_command(
     loadtestConfig: LoadTestConfig,
 ) -> List[str]:
     return [
-        "transaction-emitter",
+        "aptos-transaction-emitter",
         "emit-tx",
         f"--mint-key={loadtestConfig['mint_key']}",
         f"--chain-id={loadtestConfig['chain_id']}",
@@ -105,6 +105,7 @@ def build_loadtest_command(
         ],
         f"--duration={loadtestConfig['duration']}",
         "--txn-expiration-time-secs=" f"{loadtestConfig['txn_expiration_time_secs']}",
+        *(["--transaction-type", "coin-transfer"] if loadtestConfig['coin_transfer'] else ["--transaction-type" , "account-generation-large-pool", "create-new-resource", "--transaction-phases", "0", "1"]),
     ]
 
 
@@ -114,16 +115,17 @@ def configure_loadtest(
 ) -> PodTemplate:
     pod = PodTemplate(template)
     pod["spec"]["containers"][0]["command"] = build_loadtest_command(loadtestConfig)
+    print(" ".join(pod["spec"]["containers"][0]["command"]))
     return pod
 
 
-def automatically_determine_targets() -> List[str]:
+def automatically_determine_targets(clusters: List[str]) -> List[str]:
     """
     Automatically determine the targets to use for load testing.
     TODO: implement some target filtering
     """
     targets = []
-    for cluster in CLUSTERS:
+    for cluster in clusters:
         validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
         for host in validator_fullnode_hosts_cluster_list:
             # targets.append(f"http://{host.validator_host}:80")
@@ -132,12 +134,14 @@ def automatically_determine_targets() -> List[str]:
     return targets
 
 
-def apply_spec(delete=False) -> None:
+def apply_spec(delete=False, only_asia=False) -> None:
     """Delete the existing loadtest pod and apply the new spec. If delete=True, then just do the delete"""
     # For each cluster
     # TODO: implement some target cluster filtering
     procs: List[subprocess.Popen] = []
     for cluster in CLUSTERS:
+        spec_file = f"{cluster}_{LOADTEST_POD_SPEC}"
+
         print(f"Applying loadtest spec to {cluster}...")
         cluster_kube_config = KUBE_CONTEXTS[cluster]
         procs.append(
@@ -157,7 +161,8 @@ def apply_spec(delete=False) -> None:
                 text=True,
             )
         )
-        if delete:
+        if delete or (only_asia and cluster not in LOADTEST_CLUSTERS):
+            print(f"Skipping cluster {cluster}")
             continue
         procs.append(
             subprocess.Popen(
@@ -167,7 +172,7 @@ def apply_spec(delete=False) -> None:
                     cluster_kube_config,
                     "apply",
                     "-f",
-                    LOADTEST_POD_SPEC,
+                    spec_file,
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -242,6 +247,24 @@ def apply_spec(delete=False) -> None:
     default=False,
     show_default=True,
 )
+@click.option(
+    "--coin-transfer",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--only-asia",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--only-within-cluster",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
 def main(
     mint_key: str,
     chain_id: str,
@@ -252,6 +275,9 @@ def main(
     target: Tuple[str],
     apply: bool,
     delete: bool,
+    coin_transfer: bool,
+    only_asia: bool,
+    only_within_cluster: bool,
 ) -> None:
     """
     Generate a pod spec for load testing.
@@ -266,21 +292,25 @@ def main(
     """
     template = build_pod_template()
 
-    config: LoadTestConfig = {
-        "mint_key": mint_key,
-        "chain_id": chain_id,
-        "targets": target or automatically_determine_targets(),
-        "target_tps": target_tps,
-        "duration": duration,
-        "mempool_backlog": mempool_backlog,
-        "txn_expiration_time_secs": txn_expiration_time_secs,
-    }
-    spec = configure_loadtest(template, config)
-    with open(LOADTEST_POD_SPEC, "w") as f:
-        f.write(yaml.dump(spec))
-        print(f"Wrote pod spec to {LOADTEST_POD_SPEC}")
+    for cluster in CLUSTERS:
+        config: LoadTestConfig = {
+            "mint_key": mint_key,
+            "chain_id": chain_id,
+            "targets": target or automatically_determine_targets([cluster] if only_within_cluster else list(CLUSTERS)),
+            "target_tps": target_tps,
+            "duration": duration,
+            "mempool_backlog": mempool_backlog,
+            "txn_expiration_time_secs": txn_expiration_time_secs,
+            "coin_transfer": coin_transfer,
+        }
+        spec = configure_loadtest(template, config)
+        spec_file = f"{cluster}_{LOADTEST_POD_SPEC}"
+        with open(spec_file, "w") as f:
+            f.write(yaml.dump(spec))
+            print(f"Wrote pod spec to {spec_file}")
+
     if apply or delete:
-        apply_spec(delete=delete)
+        apply_spec(delete=delete, only_asia=only_asia)
     else:
         print(yaml.dump(spec))
 

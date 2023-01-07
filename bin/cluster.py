@@ -125,7 +125,7 @@ def auth() -> None:
             raise SystemExit(1)
 
 
-def generate_keys_for_genesis() -> None:
+def generate_keys_for_genesis(cli_path: str = "") -> None:
     procs: List[subprocess.Popen] = []
     for cluster, nodes_per_cluster in CLUSTERS.items():
         for i in range(nodes_per_cluster):
@@ -133,7 +133,7 @@ def generate_keys_for_genesis() -> None:
             procs.append(
                 subprocess.Popen(
                     [
-                        "aptos",
+                        f"{cli_path}aptos",
                         "genesis",
                         "generate-keys",
                         "--output-dir",
@@ -155,7 +155,7 @@ def generate_keys_for_genesis() -> None:
             raise SystemExit(1)
 
 
-def set_validator_configuration_for_genesis() -> None:
+def set_validator_configuration_for_genesis(cli_path: str = "") -> None:
     procs: List[subprocess.Popen] = []
     # get the services for each cluster
     for cluster in CLUSTERS:
@@ -167,7 +167,7 @@ def set_validator_configuration_for_genesis() -> None:
             procs.append(
                 subprocess.Popen(
                     [
-                        "aptos",
+                        f"{cli_path}aptos",
                         "genesis",
                         "set-validator-configuration",
                         "--owner-public-identity-file",
@@ -220,9 +220,15 @@ def genesis() -> None:
     default=False,
     help="Set validator config. Reuse files on disk if unset",
 )
+@click.option(
+    "--cli-path",
+    default="",
+    help="Path to the aptos CLI executable",
+)
 def create_genesis(
     generate_keys: bool = False,
     set_validator_config: bool = False,
+    cli_path: str = "",
 ) -> None:
     """
     Create genesis for the network and write it to the genesis directory
@@ -230,12 +236,12 @@ def create_genesis(
     # generate new keys for each node
     if generate_keys:
         print("Regenerating keys for genesis via aptos CLI")
-        generate_keys_for_genesis()
+        generate_keys_for_genesis(cli_path)
 
     # set the validator configuration for each node
     if set_validator_config:
         print("Setting validator configuration for genesis via aptos CLI")
-        set_validator_configuration_for_genesis()
+        set_validator_configuration_for_genesis(cli_path)
 
     # create the layout file
     with open("genesis/layout.yaml", "w") as outfile:
@@ -244,7 +250,7 @@ def create_genesis(
     # create genesis
     subprocess.run(
         [
-            "aptos",
+            f"{cli_path}aptos",
             "genesis",
             "generate-genesis",
             "--local-repository-dir",
