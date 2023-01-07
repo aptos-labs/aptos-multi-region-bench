@@ -48,6 +48,8 @@ git clone --recurse-submodules git@github.com:aptos-labs/aptos-google-benchmark.
 git clone --recurse-submodules https://github.com/aptos-labs/aptos-google-benchmark.git
 ```
 
+If you've already cloned the repo, you can update the submodules any time with: `git submodule init && git submodule update`
+
 Set up GCP access
 
 ```
