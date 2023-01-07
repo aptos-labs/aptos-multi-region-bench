@@ -1,7 +1,7 @@
 chain:
   chain_id: TESTING
   chain_name: aptos-google
-  era: 30
+  era: 36
 chart_sha1: 2a472f76b1124a57172a902029640f1f3a01e902
 fullnode:
   affinity:
@@ -37,6 +37,8 @@ fullnode:
   config:
     api:
       max_submit_transaction_batch_size: 100
+    execution:
+      processed_transactions_detailed_counters: true
 
 imageTag: performance_81e60a72b56dba7fdfa357876bd85ac3d0093ae1
 
@@ -72,5 +74,8 @@ validator:
     class: ssd
     size: 2500Gi
   config:
+    consensus:
+      max_sending_block_txns: 6000
+      max_sending_block_bytes: 3000000
     execution:
       processed_transactions_detailed_counters: true

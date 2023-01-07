@@ -49,7 +49,7 @@ def build_pod_template() -> PodTemplate:
             "containers": [
                 {
                     "name": LOADTEST_POD_NAME,
-                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:d49b4c2dadb6f4f44e9890b921fd2fa3aa044b1b",
+                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_47ff9fe7341fcacd4c09b892faf834bdb1f2c1a1",
                     "env": [
                         {
                             "name": "RUST_BACKTRACE",
@@ -105,6 +105,7 @@ def build_loadtest_command(
         ],
         f"--duration={loadtestConfig['duration']}",
         "--txn-expiration-time-secs=" f"{loadtestConfig['txn_expiration_time_secs']}",
+        "--max-transactions-per-account=5",
         *(["--transaction-type", "coin-transfer"] if loadtestConfig['coin_transfer'] else ["--transaction-type" , "account-generation-large-pool", "create-new-resource", "--transaction-phases", "0", "1"]),
     ]
 
