@@ -40,12 +40,23 @@ Throughput (snapshot Dec 5, 2022 - Jan 3, 2023):
 
 ## Env setup
 
+Clone the repo, including the git submodule which links to `aptos-labs/aptos-core` deployment configurations:
+
 ```
-# Set up GCP access
+git clone --recurse-submodules git@github.com:aptos-labs/aptos-google-benchmark.git bench
+# OR
+git clone --recurse-submodules https://github.com/aptos-labs/aptos-google-benchmark.git
+```
+
+Set up GCP access
+
+```
 gcloud auth login --update-adc
 gcloud config set project omega-booster-372221
+```
 
-# This step authenticates with all GKE clusters
+Authenticate with all GKE clusters
+```
 ./bin/cluster.py auth
 ```
 
