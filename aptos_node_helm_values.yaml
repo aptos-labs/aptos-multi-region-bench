@@ -1,7 +1,7 @@
 chain:
   chain_id: TESTING
   chain_name: aptos-google
-  era: 36
+  era: 42
 chart_sha1: 2a472f76b1124a57172a902029640f1f3a01e902
 fullnode:
   affinity:
@@ -26,10 +26,10 @@ fullnode:
     repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
   resources:
     limits:
-      cpu: "30"
+      cpu: "13"
       memory: 32Gi
     requests:
-      cpu: "30"
+      cpu: "13"
       memory: 32Gi
   storage:
     class: ssd
@@ -65,11 +65,11 @@ validator:
     repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
   resources:
     limits:
-      cpu: "30"
-      memory: 32Gi
+      cpu: "45"
+      memory: 64Gi
     requests:
-      cpu: "30"
-      memory: 32Gi
+      cpu: "45"
+      memory: 64Gi
   storage:
     class: ssd
     size: 2500Gi
@@ -79,3 +79,4 @@ validator:
       max_sending_block_bytes: 3000000
     execution:
       processed_transactions_detailed_counters: true
+      concurrency_level: 24
