@@ -1,3 +1,4 @@
+import yaml
 from enum import Enum
 from typing import Dict
 from kubernetes import config, client
@@ -30,6 +31,11 @@ KUBE_CONTEXTS = {
 }
 NAMESPACE = "default"
 
+with open(APTOS_NODE_HELM_VALUES_FILE, "r") as genesis_file:
+    values = yaml.load(genesis_file, Loader=yaml.FullLoader)
+    current_era = values["chain"]["era"]
+    print(f"Loading config: {APTOS_NODE_HELM_VALUES_FILE} era: {current_era}")
+
 LAYOUT = {
     # This is the same testing key as in forge: https://github.com/aptos-labs/aptos-core/blob/main/testsuite/forge/src/backend/k8s/constants.rs#L7-L10
     # The private mint key being: 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19
@@ -39,7 +45,7 @@ LAYOUT = {
         for cluster in CLUSTERS
         for i in range(CLUSTERS[cluster])
     ],
-    "chain_id": 4,  # TESTING chain_id
+    "chain_id": int(current_era),  # NOTE: the chain_id changes for each era to prevent new nodes from connecting to old chain as its shutting down
     "allow_new_validators": True,
     "epoch_duration_secs": 7200,
     "is_test": True,
