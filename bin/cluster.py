@@ -178,8 +178,8 @@ def set_validator_configuration_for_genesis(cli_path: str = "") -> None:
                         node_username,
                         "--validator-host",
                         f"{hosts.validator_host}:6180",
-                        "--full-node-host",
-                        f"{hosts.fullnode_host}:6182",
+                        # "--full-node-host",
+                        # f"{hosts.fullnode_host}:6182",
                         "--stake-amount",
                         f"{10**8 * 10**6}",  # 1M APT in octas
                     ],
@@ -426,12 +426,12 @@ def patch_node_scale(
     apps_client = client.AppsV1Api(kube_clients()[cluster])
     long_node_name = f"{cluster.value}-{node_name}"
     validator_sts_prefix = f"{long_node_name}-validator"
-    fullnode_sts_prefix = f"{long_node_name}-fullnode-e"
+    # fullnode_sts_prefix = f"{long_node_name}-fullnode-e"
     stateful_sets = apps_client.list_namespaced_stateful_set(NAMESPACE)
     for stateful_set in stateful_sets.items:
         if (
             validator_sts_prefix in stateful_set.metadata.name
-            or fullnode_sts_prefix in stateful_set.metadata.name
+            # or fullnode_sts_prefix in stateful_set.metadata.name
         ):
             apps_client.patch_namespaced_stateful_set_scale(
                 stateful_set.metadata.name,
@@ -532,9 +532,10 @@ def aptos_node_helm_upgrade(
     cluster: Cluster, helm_chart_directory: str, values_file: str
 ) -> Tuple[Cluster, int]:
     num_nodes = CLUSTERS[cluster]
+    num_fullnodes = 0
     helm_upgrade_override_values = [
         "--set",
-        f"numFullnodeGroups={num_nodes}",
+        f"numFullnodeGroups={num_fullnodes}",
         "--set",
         f"numValidators={num_nodes}",
     ]
@@ -641,7 +642,7 @@ def clean_previous_era_pvc(cluster: Cluster, era: str) -> None:
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
-        for pvc_substring in [fullnode_pvc_era_substring, validator_pvc_era_substring]:
+        for pvc_substring in [validator_pvc_era_substring]:
             core_client = client.CoreV1Api(kube_clients()[available_cluster])
             pvcs = core_client.list_namespaced_persistent_volume_claim(NAMESPACE)
             for pvc in pvcs.items:
@@ -700,7 +701,7 @@ def clean_previous_era_resources(cluster: str, era: str) -> None:
     cluster = Cluster(cluster)
     clean_previous_era_secrets(cluster, era)
     clean_previous_era_pvc(cluster, era)
-    clean_previous_era_stateful_set(cluster, era)
+    # clean_previous_era_stateful_set(cluster, era)
 
 
 if __name__ == "__main__":

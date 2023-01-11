@@ -49,7 +49,7 @@ def build_pod_template() -> PodTemplate:
             "containers": [
                 {
                     "name": LOADTEST_POD_NAME,
-                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_47ff9fe7341fcacd4c09b892faf834bdb1f2c1a1",
+                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_f9207b5f88ecb77047ac8ae2f5b52ca7918115ae",
                     "env": [
                         {
                             "name": "RUST_BACKTRACE",
@@ -104,6 +104,7 @@ def build_loadtest_command(
             else f"--mempool-backlog={loadtestConfig['mempool_backlog']}"
         ],
         f"--duration={loadtestConfig['duration']}",
+        f"--delay-after-minting={loadtestConfig['delay_after_minting']}",
         "--txn-expiration-time-secs=" f"{loadtestConfig['txn_expiration_time_secs']}",
         "--max-transactions-per-account=5",
         *(["--transaction-type", "coin-transfer"] if loadtestConfig['coin_transfer'] else ["--transaction-type" , "account-generation-large-pool", "create-new-resource", "--transaction-phases", "0", "1"]),
@@ -129,8 +130,8 @@ def automatically_determine_targets(clusters: List[str]) -> List[str]:
     for cluster in clusters:
         validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
         for host in validator_fullnode_hosts_cluster_list:
-            # targets.append(f"http://{host.validator_host}:80")
-            targets.append(f"http://{host.fullnode_host}:80")
+            targets.append(f"http://{host.validator_host}:80")
+            # targets.append(f"http://{host.fullnode_host}:80")
 
     return targets
 
@@ -225,6 +226,12 @@ def apply_spec(delete=False, only_asia=False) -> None:
     show_default=True,
 )
 @click.option(
+    "--delay-after-minting",
+    type=int,
+    default=60,
+    show_default=True,
+)
+@click.option(
     "--mempool-backlog",
     type=int,
     default=1000,
@@ -271,6 +278,7 @@ def main(
     chain_id: str,
     target_tps: Optional[int],
     duration: int,
+    delay_after_minting: int,
     mempool_backlog: int,
     txn_expiration_time_secs: int,
     target: Tuple[str],
@@ -300,6 +308,7 @@ def main(
             "targets": target or automatically_determine_targets([cluster] if only_within_cluster else list(CLUSTERS)),
             "target_tps": target_tps,
             "duration": duration,
+            "delay_after_minting": 0 if only_asia else delay_after_minting,
             "mempool_backlog": mempool_backlog,
             "txn_expiration_time_secs": txn_expiration_time_secs,
             "coin_transfer": coin_transfer,

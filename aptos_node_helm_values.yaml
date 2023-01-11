@@ -1,7 +1,7 @@
 chain:
   chain_id: TESTING
   chain_name: aptos-google
-  era: 42
+  era: 70
 chart_sha1: 2a472f76b1124a57172a902029640f1f3a01e902
 fullnode:
   affinity:
@@ -40,7 +40,7 @@ fullnode:
     execution:
       processed_transactions_detailed_counters: true
 
-imageTag: performance_81e60a72b56dba7fdfa357876bd85ac3d0093ae1
+imageTag: performance_46e04417186c82371aa4ae645c5df4809cbf8e25
 
 validator:
   affinity:
@@ -75,8 +75,9 @@ validator:
     size: 2500Gi
   config:
     consensus:
-      max_sending_block_txns: 6000
-      max_sending_block_bytes: 3000000
+      quorum_store_poll_count: 25
+      max_sending_block_txns: 8000
+      max_sending_block_bytes: 6000000
     execution:
       processed_transactions_detailed_counters: true
       concurrency_level: 24
