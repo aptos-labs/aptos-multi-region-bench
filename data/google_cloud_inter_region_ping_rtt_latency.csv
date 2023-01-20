@@ -1,0 +1,7 @@
+sending_region,receiving_region,milliseconds
+asia-east1,us-west1,118.553
+europe-west4,us-west1,133.412
+us-west1,asia-east1,118.541
+europe-west4,asia-east1,251.777
+us-west1,europe-west4,133.435
+asia-east1,europe-west4,251.794

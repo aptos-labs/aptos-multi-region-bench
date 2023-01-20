@@ -1,0 +1,7 @@
+sending_region,receiving_region,Gbits/sec
+us-west1,europe-west4,9.778
+us-west1,asia-east1,9.802
+europe-west4,asia-east1,9.326
+asia-east1,europe-west4,9.344
+asia-east1,us-west1,9.811
+europe-west4,us-west1,9.815

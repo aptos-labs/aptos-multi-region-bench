@@ -1,0 +1,81 @@
+chain:
+  chain_id: TESTING
+  chain_name: aptos-multi-region-bench
+  era: 44
+fullnode:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cloud.google.com/machine-family
+                operator: In
+                values:
+                  - t2d
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/part-of
+                operator: In
+                values:
+                  - aptos-node
+          topologyKey: kubernetes.io/hostname
+  image:
+    repo: aptoslabs/validator
+  resources:
+    limits:
+      cpu: "13"
+      memory: 32Gi
+    requests:
+      cpu: "13"
+      memory: 32Gi
+  storage:
+    class: ssd
+    size: 2500Gi
+  config:
+    api:
+      max_submit_transaction_batch_size: 100
+    execution:
+      processed_transactions_detailed_counters: true
+
+imageTag: performance_81e60a72b56dba7fdfa357876bd85ac3d0093ae1
+
+validator:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cloud.google.com/machine-family
+                operator: In
+                values:
+                  - t2d
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/part-of
+                operator: In
+                values:
+                  - aptos-node
+          topologyKey: kubernetes.io/hostname
+  image:
+    repo: aptoslabs/validator
+  resources:
+    limits:
+      cpu: "45"
+      memory: 64Gi
+    requests:
+      cpu: "45"
+      memory: 64Gi
+  storage:
+    class: ssd
+    size: 2500Gi
+  config:
+    consensus:
+      max_sending_block_txns: 6000
+      max_sending_block_bytes: 3000000
+    execution:
+      processed_transactions_detailed_counters: true
+      concurrency_level: 24
