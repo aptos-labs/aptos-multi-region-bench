@@ -544,6 +544,8 @@ def aptos_node_helm_upgrade(
             "--kube-context",
             KUBE_CONTEXTS[cluster],
             "upgrade",
+            "--debug",
+            "--history-max=2",
             "--install",
             cluster.value,  # the helm_release is named after the cluster it is in
             helm_chart_directory,  # the helm chart version is that of the subdirectory
@@ -701,6 +703,60 @@ def clean_previous_era_resources(cluster: str, era: str) -> None:
     clean_previous_era_secrets(cluster, era)
     clean_previous_era_pvc(cluster, era)
     clean_previous_era_stateful_set(cluster, era)
+
+@main.command("show-max-resources")
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
+def show_max_resources(cluster: str) -> None:
+    """
+    Show the maximum resources that can be used for a node. This assumes that most of your compute resources are used for nodes on each k8s worker, and that the rest of the compute
+    is either on other machines, or is resrved for daemonsets.
+    """
+    cluster = Cluster(cluster)
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster and cluster != Cluster.ALL:
+            continue
+        apps_client = client.AppsV1Api(kube_clients()[available_cluster])
+        daemonsets = apps_client.list_daemon_set_for_all_namespaces()
+        sum_all_memory_requests = 0
+        sum_all_memory_limits = 0
+        sum_all_cpu_requests = 0
+        sum_all_cpu_limits = 0
+        for daemonset in daemonsets.items:
+            try:
+                sum_all_memory_requests += int(
+                    daemonset.spec.template.spec.containers[0].resources.requests[
+                        "memory"
+                    ].replace("Mi", "")
+                )
+                sum_all_cpu_requests += int(
+                    daemonset.spec.template.spec.containers[0].resources.requests[
+                        "cpu"
+                    ].replace("m", "")
+                )
+                sum_all_memory_limits += int(
+                    daemonset.spec.template.spec.containers[0].resources.limits[
+                        "memory"
+                    ].replace("Mi", "")
+                )
+                sum_all_cpu_limits += int(
+                    daemonset.spec.template.spec.containers[0].resources.limits[
+                        "cpu"
+                    ].replace("m", "")
+                )
+            except (KeyError, TypeError):
+                print("No resource info for daemonset")
+        print(
+            f"Total memory requests: {sum_all_memory_requests}Mi, Total memory limits: {sum_all_memory_limits}Mi"
+        )
+        print(
+            f"Total cpu requests: {sum_all_cpu_requests}m, Total cpu limits: {sum_all_cpu_limits}m"
+        )
+
 
 
 if __name__ == "__main__":
