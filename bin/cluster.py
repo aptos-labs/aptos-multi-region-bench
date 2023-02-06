@@ -102,7 +102,7 @@ def reauth_gcloud() -> int:
     ret = subprocess.run(["gcloud", "auth", "login", "--update-adc"])
     if ret.returncode != 0:
         return ret.returncode
-    ret = subprocess.run(["gcloud", "config", "set", "project", GCP_PROJECT_NAME])
+    ret = subprocess.run(["gcloud", "config", "set", "project", GCP_PROJECT_ID])
     if ret.returncode != 0:
         return ret.returncode
     return 0

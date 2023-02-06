@@ -64,9 +64,9 @@ gcloud config set project $GCP_PROJECT_ID
 
 ### Set up the infrastructure
 
-Each region's infrasstructure is deployed separately, via Terraform. Each directory in the top-level `terraform/` directory corresponds to a Terraform project. 
+Each region's infrastructure is deployed separately, via Terraform. Each directory in the top-level `terraform/` directory corresponds to a Terraform project. 
 
-If you are unfamiliar with Terraform, check out these reference docs:
+If you are unfamiliar with Terraform, it's highly recommended that you familiarize yourself with Terraform concepts before you get started. This will help you ensure the health of your infrastructure, as well as prevent unnecessary costs. Particularly, these reference documentation links:
 * What is Terraform: https://developer.hashicorp.com/terraform/intro
 * Terraform backends: https://developer.hashicorp.com/terraform/language/settings/backends/configuration
 * Terraform workspaces: https://developer.hashicorp.com/terraform/language/state/workspaces
@@ -81,16 +81,17 @@ gsutil mb gs://<project-name>-aptos-terraform-bench
 
 Then, edit `terraform/example.backend.tfvars` to reference the gcs bucket created in the previous step. Rename `terraform/example.backend.tfvars` to `terraform/backend.tfvars`.
 
-Deploy each region's infrastructure using the following commands. For each of the Terraform project directories in `terraform/`, run:
+Deploy each region's infrastructure using the following commands. For each of the Terraform project directories in `terraform/`, run the following series of commands:
 
 ```
-# Initialize terraform and its backend in each directory
+# Initialize terraform and its backend, using the backend configuration created in the previous step
+# This will copy the public reference terraform modules written by Aptos Labs into the .terraform/modules directory
 terraform init -backend-config=../backend.tfvars
 
 # This environment variable is used to apply the infrastructure to the GCP project you set up in the previous step
 export TF_VAR_project=$GCP_PROJECT_ID
 
-# Initialize your terraform workspaces, one for each directory.
+# Initialize your terraform workspaces, one unique workspace name for each directory.
 terraform workspace new <WORKSPACE_NAME>
 # for example
 terraform workspace new bench-asia-east1
@@ -102,10 +103,12 @@ terraform plan
 terraform apply
 ```
 
+
 After all the infrastructure is created, you can use the `cluster.py` utility to authenticate against all clusters. This will be your primary tool for interacting with each of the cluster's workloads. It is a wrapper around the kube API and familiar `kubectl` commands.
 
 Authenticate with all GKE clusters
 ```
+# this script must be run from the repository root
 ./bin/cluster.py auth
 ```
 
