@@ -42,31 +42,64 @@ Throughput (snapshot Dec 5, 2022 - Jan 3, 2023):
 
 ### Clone the repo
 
-Clone the repo, including the git submodule which links to `aptos-labs/deployment` deployment configurations:
-
 ```
-git clone --recurse-submodules git@github.com:aptos-labs/aptos-bench-benchmark.git bench
-# OR
-git clone --recurse-submodules https://github.com/aptos-labs/aptos-bench-benchmark.git
+git clone https://github.com/aptos-labs/aptos-multi-region-bench.git
+cd aptos-multi-region-bench
 ```
-
-If you've already cloned the repo, you can update the submodules any time with: `git submodule init && git submodule update`
 
 ### Set up GCP access
 
-Sign in with the `gcloud` CLI. Also it will be useful to set the environment variable `GCP_PROJECT_ID` for future use.
+Create a GCP project and sign in with the `gcloud` CLI. Also it will be useful to set the environment variable `GCP_PROJECT_ID` for future use.
+
+For reference:
+* Install `gcloud` CLI: https://cloud.google.com/sdk/docs/install
+* Create a GCP project: https://cloud.google.com/resource-manager/docs/creating-managing-projects
 
 ```
+export GCP_PROJECT_ID=<YOUR_GCP_PROJECT_ID>
+
 gcloud auth login --update-adc
 gcloud config set project $GCP_PROJECT_ID
 ```
 
 ### Set up the infrastructure
 
-Each region's infrasstructure is deployed separately, via Terraform. Each directory in the top-level `terraform/` directory corresponds to a Terraform project. Deploy and manage it via the following command in each directory:
+Each region's infrasstructure is deployed separately, via Terraform. Each directory in the top-level `terraform/` directory corresponds to a Terraform project. 
+
+If you are unfamiliar with Terraform, check out these reference docs:
+* What is Terraform: https://developer.hashicorp.com/terraform/intro
+* Terraform backends: https://developer.hashicorp.com/terraform/language/settings/backends/configuration
+* Terraform workspaces: https://developer.hashicorp.com/terraform/language/state/workspaces
+
+Create a storage bucket for storing the Terraform state on Google Cloud Storage. Use the console or this `gcs` command to create the bucket. The name of the bucket must be unique. See the Google Cloud Storage documentation here: https://cloud.google.com/storage/docs/creating-buckets#prereq-cli.
 
 ```
-TF_VAR_project=$GCP_PROJECT_ID terraform apply
+gsutil mb gs://BUCKET_NAME
+# for example
+gsutil mb gs://<project-name>-aptos-terraform-bench
+```
+
+Then, edit `terraform/example.backend.tfvars` to reference the gcs bucket created in the previous step. Rename `terraform/example.backend.tfvars` to `terraform/backend.tfvars`.
+
+Deploy each region's infrastructure using the following commands. For each of the Terraform project directories in `terraform/`, run:
+
+```
+# Initialize terraform and its backend in each directory
+terraform init -backend-config=../backend.tfvars
+
+# This environment variable is used to apply the infrastructure to the GCP project you set up in the previous step
+export TF_VAR_project=$GCP_PROJECT_ID
+
+# Initialize your terraform workspaces, one for each directory.
+terraform workspace new <WORKSPACE_NAME>
+# for example
+terraform workspace new bench-asia-east1
+
+# check the infrastructure that will be applied
+terraform plan
+
+# apply it
+terraform apply
 ```
 
 After all the infrastructure is created, you can use the `cluster.py` utility to authenticate against all clusters. This will be your primary tool for interacting with each of the cluster's workloads. It is a wrapper around the kube API and familiar `kubectl` commands.

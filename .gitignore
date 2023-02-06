@@ -38,3 +38,4 @@ genesis/*
 kubectx.sh
 
 .terraform.lock.hcl
+backend.tfvars

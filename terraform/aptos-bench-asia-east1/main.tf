@@ -1,9 +1,6 @@
 terraform {
   required_version = "~> 1.3.6"
-  backend "gcs" {
-    bucket = "aptos-bench-terraform-dev"
-    prefix = "state/testnet"
-  }
+  backend "gcs" {}
 }
 
 variable "project" {
@@ -69,7 +66,7 @@ locals {
 }
 
 module "aptos-node" {
-  source = "../../submodules/deployment-main/terraform/aptos-node/gcp"
+  source = "github.com/aptos-labs/deployment.git//terraform/aptos-node/gcp?ref=main"
 
   manage_via_tf = false
 
