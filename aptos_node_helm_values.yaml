@@ -2,6 +2,8 @@ chain:
   chain_id: TESTING
   chain_name: aptos-multi-region-bench
   era: 46
+haproxy:
+  enabled: false
 fullnode:
   affinity:
     nodeAffinity:
