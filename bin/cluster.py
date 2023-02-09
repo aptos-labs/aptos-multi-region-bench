@@ -34,9 +34,11 @@ def get_validator_fullnode_host(
     for service in services.items:
         if node_name in service.metadata.name:
             try:
-                if "validator-lb" in service.metadata.name:
+                # if "validator-lb" in service.metadata.name: # if haproxy is enabled
+                if "validator" in service.metadata.name: # if haproxy is not enabled
                     validator_host = service.status.load_balancer.ingress[0].ip
-                if "fullnode-lb" in service.metadata.name:
+                # if "fullnode-lb" in service.metadata.name: # if haproxy is enabled
+                if "fullnode" in service.metadata.name: # if haproxy is not enabled
                     fullnode_host = service.status.load_balancer.ingress[0].ip
 
             except (IndexError, TypeError):

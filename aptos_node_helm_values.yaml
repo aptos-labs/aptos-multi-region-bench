@@ -3,10 +3,20 @@ imageTag: devnet_performance # change this to the docker image tag you want
 chain:
   chain_id: TESTING
   chain_name: aptos-multi-region-bench
-  era: 49 # bump this to wipe the chain
+  era: 2 # bump this to wipe the chain
 
+# for these experiments, haproxy disabled, and hit the validators and VFN LBs directly
 haproxy:
   enabled: false
+
+# validator and VFN get their own LoadBalancer
+service:
+  validator:
+    internal:
+      type: LoadBalancer
+  fullnode:
+    internal:
+      type: LoadBalancer
 
 # the validator configuration
 validator:

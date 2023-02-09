@@ -38,7 +38,7 @@ Throughput (snapshot Dec 5, 2022 - Jan 3, 2023):
 |us-west1      |asia-east1      |9.802    |
 |us-west1      |europe-west4    |9.778    |
 
-## Env setup
+## Benchmark setup
 
 ### Clone the repo
 
@@ -140,15 +140,23 @@ Also ensure that the CLI is available in the `PATH`.
 
 #### Run genesis
 
-In this setup, you will mostly be interacting with `aptos_node_helm_values.yaml` to configure the benchmark network as a whole. To run genesis for the first time,
-change the chain's "era" in the configuration:
+In this setup, you will mostly be interacting with `aptos_node_helm_values.yaml` to configure the benchmark network as a whole.
+
+Firstly, start all the validators and fullnodes. After this, all the nodes that are brought up will need genesis configs and their keys generated and uploaded to them. We do this step first to warm up the infrastructure:
 
 ```
-# 1. Changing the chain's era wipes all storage and tells the system to start from scratch
-<edit aptos_node_helm_values.yaml with a new chain.era>
+# 1. Helm upgrade the configuration to all clusters (this may take a few minutes)
+time ./bin/cluster.py helm-upgrade
 ```
 
-Then, to run genesis and set all validator configs:
+Check that all LoadBalancers have been provisionined for each validator and fullnode. From the output, check if there are any services that have `<pending>` for their `EXTERNAL-IP`.
+
+```
+# 1.1. Filter all kubernetes services by LoadBalancer type, checking for pending
+./bin/cluster.py kube get svc | grep LoadBalancer
+```
+
+To run genesis for the first time:
 ```
 # 2. You have a few options here
 
@@ -164,10 +172,9 @@ After the keys and validator configs are generated, they'll need to be uploaded 
 ./bin/cluster.py genesis upload --apply
 ```
 
-Finally, apply the node configuration via helm. Depending on the configs changed between each time this config is applied, the nodes may restart.
+From here onwards, you can use Helm to manage the lifecycle of your nodes. If there is any config change you want to make, you can run helm-upgrade again. If nothing has changed, running it again should be idempotent:
 ```
 # 4. Upgrade all nodes (this may take a few minutes)
-# this can be done in parallel with above upload step in another terminal
 time ./bin/cluster.py helm-upgrade
 ```
 
@@ -202,6 +209,8 @@ Submit load test against the network. The root keypair is hardcoded in genesis. 
 ```
 
 #### Wipe the network and start from scratch
+
+To wipe the chain, change the chain's "era" in the helm values in `aptos_node_helm_values.yaml`. This tells the kubernetes workloads to switch their underlying volumes, thus starting the chian from scratch.
 
 
 #### Changing the network size (and starting a new network)
