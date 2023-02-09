@@ -66,7 +66,7 @@ locals {
 }
 
 module "aptos-node" {
-  source = "../../submodules/deployment-main/terraform/aptos-node/gcp"
+  source = "../../submodules/deployment-main/aptos-node/gcp"
 
   manage_via_tf = false
 
