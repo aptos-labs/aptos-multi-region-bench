@@ -156,7 +156,7 @@ Firstly, start all the validators and fullnodes. After this, all the nodes that 
 time ./bin/cluster.py helm-upgrade
 ```
 
-Check that all LoadBalancers have been provisionined for each validator and fullnode. From the output, check if there are any services that have `<pending>` for their `EXTERNAL-IP`.
+Check that all LoadBalancers have been provisionined for each validator and fullnode. From the output, check if there are any services that have `<pending>` for their `EXTERNAL-IP`. Wait until all LoadBalancers are brought up before proceeding to the next step.
 
 ```
 # 1.1. Filter all kubernetes services by LoadBalancer type, checking for pending
