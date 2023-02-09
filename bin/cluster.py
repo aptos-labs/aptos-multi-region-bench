@@ -24,7 +24,7 @@ class ValidatorFullnodeHosts:
 
 
 def get_validator_fullnode_host(
-    services: client.V1ServiceList, node_name: str
+    cluster: Cluster, services: client.V1ServiceList, node_name: str
 ) -> ValidatorFullnodeHosts:
     """
     Get the validator and fullnode hosts for the given node, in sorted order by their index
@@ -69,7 +69,7 @@ def get_validator_fullnode_hosts(
     num_nodes = CLUSTERS[cluster]
     for node in range(num_nodes):
         node_name = f"node-{node}"
-        validator_fullnode_hosts = get_validator_fullnode_host(services, node_name)
+        validator_fullnode_hosts = get_validator_fullnode_host(cluster, services, node_name)
         validator_fullnode_hosts_list.append(validator_fullnode_hosts)
 
     assert len(validator_fullnode_hosts_list) == num_nodes

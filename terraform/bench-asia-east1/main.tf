@@ -66,7 +66,7 @@ locals {
 }
 
 module "aptos-node" {
-  source = "github.com/aptos-labs/deployment.git//terraform/aptos-node/gcp?ref=main"
+  source = "../../submodules/deployment-main/terraform/aptos-node/gcp"
 
   manage_via_tf = false
 

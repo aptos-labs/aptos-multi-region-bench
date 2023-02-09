@@ -1,48 +1,14 @@
+imageTag: devnet_performance # change this to the docker image tag you want
+
 chain:
   chain_id: TESTING
   chain_name: aptos-multi-region-bench
-  era: 46
+  era: 47 # bump this to wipe the chain
+
 haproxy:
   enabled: false
-fullnode:
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: cloud.google.com/machine-family
-                operator: In
-                values:
-                  - t2d
-    podAntiAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchExpressions:
-              - key: app.kubernetes.io/part-of
-                operator: In
-                values:
-                  - aptos-node
-          topologyKey: kubernetes.io/hostname
-  image:
-    repo: aptoslabs/validator
-  resources:
-    limits:
-      cpu: "13"
-      memory: 32Gi
-    requests:
-      cpu: "13"
-      memory: 32Gi
-  storage:
-    class: ssd
-    size: 1000Gi
-  config:
-    api:
-      max_submit_transaction_batch_size: 100
-    execution:
-      processed_transactions_detailed_counters: true
 
-imageTag: devnet_performance
-
+# the validator configuration
 validator:
   affinity:
     nodeAffinity:
@@ -81,3 +47,41 @@ validator:
     execution:
       processed_transactions_detailed_counters: true
       concurrency_level: 24
+
+# the VFN configuration
+fullnode:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cloud.google.com/machine-family
+                operator: In
+                values:
+                  - t2d
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/part-of
+                operator: In
+                values:
+                  - aptos-node
+          topologyKey: kubernetes.io/hostname
+  image:
+    repo: aptoslabs/validator
+  resources:
+    limits:
+      cpu: "13"
+      memory: 32Gi
+    requests:
+      cpu: "13"
+      memory: 32Gi
+  storage:
+    class: ssd
+    size: 1000Gi
+  config:
+    api:
+      max_submit_transaction_batch_size: 100
+    execution:
+      processed_transactions_detailed_counters: true

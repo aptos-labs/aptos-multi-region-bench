@@ -112,7 +112,59 @@ Authenticate with all GKE clusters
 ./bin/cluster.py auth
 ```
 
-## Scripts
+### Initialize the Network
+
+At this point, most of the required infrastructure has been set up. You must now begin the genesis process and start all the Aptos nodes in each kubernetes cluster. As a quick sanity check, visit this URL to view all your active kubernetes clusters within the project https://console.cloud.google.com/kubernetes/list/overview?referrer=search&project=<YOUR_PROJECT_ID>, and confirm that all are in a healthy "green" state. If not, use GKE's tooltips and logs to help debug.
+
+By default, Terraform will also install some baseline Aptos workloads on each of the kubernetes clusters as well. To check these running workloads, run the following from the project root:
+
+```
+./bin/cluster.py kube get pods 
+```
+
+You will see most pods are in a `ContainerCreating` state. Digging deeper this is because these pods (fullnodes and validators) are waiting for genesis configurations. Genesis has not been run yet, so naturally these pods are pending.
+
+#### Install `aptos` CLI
+
+Some of the scripts below require the `aptos` CLI to be installed. Install instructions: https://aptos.dev/cli-tools/aptos-cli-tool/
+
+Also ensure that the CLI is available in the `PATH`.
+
+#### Run genesis
+
+In this setup, you will mostly be interacting with `aptos_node_helm_values.yaml` to configure the benchmark network as a whole. To run genesis for the first time,
+change the chain's "era" in the configuration:
+
+```
+# 1. Changing the chain's era wipes all storage and tells the system to start from scratch
+<edit aptos_node_helm_values.yaml with a new chain.era>
+```
+
+Then, to run genesis and set all validator configs:
+```
+# 2. You have a few options here
+
+# a. (RECOMMENDED) re-generate keys and re-fetch the external IPs for validator config
+yes | ./bin/cluster.py genesis create --generate-keys --set-validator-config
+# b. to set validator config without generating new keys
+yes | ./bin/cluster.py genesis create --set-validator-config
+```
+
+After the keys and validator configs are generated, they'll need to be uploaded to each node (via kubernetes) for startup:
+```
+# 3. Upload genesis configs to each node for startup
+./bin/cluster.py genesis upload --apply
+```
+
+Finally, apply the node configuration via helm. Depending on the configs changed between each time this config is applied, the nodes may restart.
+```
+# 4. Upgrade all nodes (this may take a few minutes)
+# this can be done in parallel with above upload step in another terminal
+time ./bin/cluster.py helm-upgrade
+```
+
+
+## Scripts Reference
 
 `bin/loadtest.py` - little loadtest utility.
 `bin/cluster.py` - cluster management utility. Creates genesis, and manages nodes lifecycle
@@ -143,24 +195,6 @@ Submit load test against the network. The root keypair is hardcoded in genesis. 
 
 #### Wipe the network and start from scratch
 
-```
-# 1. Changing the chain's era wipes all storage and tells the system to start from scratch
-<edit aptos_node_helm_values.yaml with a new chain.era>
-
-# 2. Re-run genesis and set all validator configs. You have a few options here
-
-# a. re-generate keys and re-fetch the external IPs for validator config
-yes | ./bin/cluster.py genesis create --generate-keys --set-validator-config
-# b. to set validator config without generating new keys
-yes | ./bin/cluster.py genesis create --set-validator-config
-
-# 3. Upload genesis configs to each node for startup
-./bin/cluster.py genesis upload --apply
-
-# 4. Upgrade all nodes (this may take a few minutes)
-# this can be done in parallel with above upload step in another terminal
-time ./bin/cluster.py helm-upgrade
-```
 
 #### Changing the network size (and starting a new network)
 * Edit `CLUSTERS` in `constants.py` to change the number of validators (and VFNs) in each region. Please note the quota
