@@ -51,9 +51,6 @@ validator:
     class: ssd
     size: 1000Gi
   config:
-    consensus:
-      max_sending_block_txns: 6000
-      max_sending_block_bytes: 3000000
     execution:
       processed_transactions_detailed_counters: true
       concurrency_level: 24
