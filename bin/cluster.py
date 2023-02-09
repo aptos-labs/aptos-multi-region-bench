@@ -404,7 +404,6 @@ def helm_commands(
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
         cluster_kube_config = KUBE_CONTEXTS[available_cluster]
-        num_nodes = CLUSTERS[available_cluster]
         print(f"=== {available_cluster.value} ===")
         subprocess.run(
             [
@@ -488,6 +487,37 @@ def kube_start(
         for i in range(CLUSTERS[available_cluster]):
             node_name = f"aptos-node-{i}"
             patch_node_scale(available_cluster, node_name, 1)
+
+@main.command("delete")
+@click.option(
+    "--cluster",
+    type=click.Choice([c.value for c in Cluster]),
+    default=Cluster.ALL.value,
+    help="Cluster to run the command on",
+)
+def helm_delete(
+    cluster: str,
+) -> None:
+    """
+    Delete all Aptos-created kubernetes resources on the cluster.
+    Useful for a hard reset of the network, in case of a bad deploy, such as when helm is stuck in a bad state
+    """
+    cluster = Cluster(cluster)
+    for available_cluster in CLUSTERS:
+        if cluster != available_cluster and cluster != Cluster.ALL:
+            continue
+        print(f"=== {available_cluster.value} ===")
+        cluster_kube_config = KUBE_CONTEXTS[available_cluster]
+        subprocess.run(
+            [
+                "helm",
+                "--kube-context",
+                cluster_kube_config,
+                "uninstall",
+                available_cluster.value # the helm_release is named after the cluster it is in
+            ],
+        )
+        print()
 
 
 def get_current_era() -> str:
