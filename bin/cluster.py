@@ -544,7 +544,7 @@ def aptos_node_helm_upgrade(
             "--kube-context",
             KUBE_CONTEXTS[cluster],
             "upgrade",
-            "--debug",
+            "--force",
             "--history-max=2",
             "--install",
             cluster.value,  # the helm_release is named after the cluster it is in

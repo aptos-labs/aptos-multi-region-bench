@@ -76,9 +76,6 @@ module "aptos-node" {
 
   validator_name = "aptos-bench-europe-4-nodes"
 
-  # NOTE: since the workspace name has the region number in it for this europe cluster, we need to override the release name
-  helm_release_name_override = "aptos-bench-europe"
-
   # for naming purposes to avoid name collisions
   chain_name          = "aptos-bench"
   num_validators      = local.num_nodes

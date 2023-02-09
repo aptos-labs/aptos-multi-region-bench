@@ -3,7 +3,7 @@ imageTag: devnet_performance # change this to the docker image tag you want
 chain:
   chain_id: TESTING
   chain_name: aptos-multi-region-bench
-  era: 47 # bump this to wipe the chain
+  era: 49 # bump this to wipe the chain
 
 haproxy:
   enabled: false
