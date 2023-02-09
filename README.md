@@ -1,7 +1,7 @@
 # Aptos Multi-Region Benchmark Setup
 
 This repo contains deployment configurations, operational scripts, and benchmarks for a multi-region Aptos benchmark on GKE. 
-* Each region is deployed separately via open source Terraform modules published by Aptos Labs
+* Each region is deployed separately via open source Terraform modules published by Aptos Labs. These are the same deployment modules used to run validators and fullnodes in production on mainnet. Validators and fullnodes connect to each other over the public internet.
 * A lightweight wrapper around the kube API and `kubectl` provides a way to form the network and submit load against the network
 
 ## Multi-region setup
@@ -10,6 +10,11 @@ Google Cloud Inter-Region Latency and Throughput: [link](https://datastudio.goog
 * asia-east1 -- Taiwan
 * europe-west4 -- Netherlands
 * us-west1 -- Oregon
+
+For each validator, the following is spun up:
+* 2x `t2d-standard-48` -- one for each the validator itself and the validator-fullnode (VFN). The machine family and size can be tuned via kubernetes resources requests and nodeAffinities, using GKE's Node-autoprovisioning. More details in the below sections.
+* 2x Google Cloud Load Balancers -- one for each the validator and VFN
+* 2x 1 TiB SSD -- one for each validator and VFN
 
 ### Raw data
 
@@ -71,6 +76,8 @@ gcloud config set project $GCP_PROJECT_ID
 ```
 
 ### Set up the infrastructure
+
+NOTE: This section may take a while to run through all the steps. A lot of the time will be spent running commands and waiting on cloud infrastructure to come alive.
 
 Each region's infrastructure is deployed separately, via Terraform. Each directory in the top-level `terraform/` directory corresponds to a Terraform project. 
 
@@ -178,7 +185,6 @@ From here onwards, you can use Helm to manage the lifecycle of your nodes. If th
 time ./bin/cluster.py helm-upgrade
 ```
 
-
 ## Scripts Reference
 
 `bin/loadtest.py` - little loadtest utility.
@@ -210,7 +216,7 @@ Submit load test against the network. The root keypair is hardcoded in genesis. 
 
 #### Wipe the network and start from scratch
 
-To wipe the chain, change the chain's "era" in the helm values in `aptos_node_helm_values.yaml`. This tells the kubernetes workloads to switch their underlying volumes, thus starting the chian from scratch.
+To wipe the chain, change the chain's "era" in the helm values in `aptos_node_helm_values.yaml`. This tells the kubernetes workloads to switch their underlying volumes, thus starting the chian from scratch. Then, follow the steps above to [Run genesis](#run-genesis)
 
 
 #### Changing the network size (and starting a new network)
@@ -239,3 +245,15 @@ docker cp `docker container ls | grep tools:${IMAGE_TAG} | awk '{print $1}'`:/ap
 `./bin/cluster.py auth` authencates across all clusters, but you make want to use the below commands to authenticate and change your kube context manually for each cluster.
 
 Each cluster is deployed in its own region via `terraform/` top-level directory. The `kubectx.sh` script in each will authenticate you against each cluster and set your kubectl context to match.
+
+#### Changing machine types
+
+This kubernetes setup relies on GKE's [Node auto-provisioning (NAP)](https://cloud.google.com/kubernetes-engine/docs/how-to/node-auto-provisioning). This allows us to specify a machine family in each workload's `nodeAffinity`. The size of the machine is automatically assigned, based on the size of the workload. In general the workload resource request must be a bit less than the max capacity. For example, if you want to use a 48 vCPU machine for validators, you may need to set the resource request at 42 vCPU only to give slack to the Node auto-provisioner, otherwise it may provision the next largest machine size.
+
+The default machine configuration via node auto-provisioning is already set in `aptos_node_helm_values.yaml`. Particularly, note the following keys:
+* `validator.affinity.nodeAffinity` -- guarantee machine type via NAP
+* `validator.resources` -- resource request and limit
+* `validator.affinity.podAntiAffinity` -- prevent validators from sharing the same machine as other validators and fullnodes
+* `fullnode.affinity.nodeAffinity` -- same as above, but for fullnodes
+* `fullnode.affinity.podAntiAffinity` -- same as above, but for fullnodes
+* `fullnode.resources` -- same as above, but for fullnodes
