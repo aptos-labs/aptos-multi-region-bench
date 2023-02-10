@@ -38,11 +38,13 @@ def get_validator_fullnode_host(
                 # if "validator-lb" in service.metadata.name: # if haproxy is enabled
                 if "validator" in service.metadata.name:  # if haproxy is not enabled
                     validator_host = service.status.load_balancer.ingress[0].ip
+                    assert validator_host != ""
                 # if "fullnode-lb" in service.metadata.name: # if haproxy is enabled
                 if "fullnode" in service.metadata.name:  # if haproxy is not enabled
                     fullnode_host = service.status.load_balancer.ingress[0].ip
+                    assert fullnode_host != ""
 
-            except (IndexError, TypeError):
+            except:
                 print(
                     f"Failed to get external LoadBalancer IP for service: {service.metadata.name}"
                 )
@@ -168,7 +170,11 @@ def set_validator_configuration_for_genesis(cli_path: str = "") -> None:
         for i, hosts in enumerate(validator_fullnode_hosts_cluster_list):
             node_index = f"aptos-node-{i}"
             node_username = f"{cluster.value}-{node_index}"
-            print(f"Setting validator configuration for {node_username} via aptos CLI")
+            validator_host_with_port = f"{hosts.validator_host}:6180"
+            fullnode_host_with_port = f"{hosts.fullnode_host}:6182"
+            print(
+                f"Setting validator configuration for {node_username} via aptos CLI: validator host: {validator_host_with_port}, fullnode host: {fullnode_host_with_port}"
+            )
             procs.append(
                 subprocess.Popen(
                     [
@@ -182,9 +188,9 @@ def set_validator_configuration_for_genesis(cli_path: str = "") -> None:
                         "--username",
                         node_username,
                         "--validator-host",
-                        f"{hosts.validator_host}:6180",
+                        validator_host_with_port,
                         "--full-node-host",
-                        f"{hosts.fullnode_host}:6182",
+                        fullnode_host_with_port,
                         "--stake-amount",
                         f"{10**8 * 10**6}",  # 1M APT in octas
                     ],
@@ -198,6 +204,7 @@ def set_validator_configuration_for_genesis(cli_path: str = "") -> None:
         proc.wait()
         if proc.returncode != 0:
             print(f"Failed to set validator configuration")
+            print(proc.args)
             outs, errs = proc.communicate()
             print(outs)
             print(errs)
@@ -508,21 +515,43 @@ def helm_delete(
     Useful for a hard reset of the network, in case of a bad deploy, such as when helm is stuck in a bad state
     """
     cluster = Cluster(cluster)
+    delete_cluster(cluster)
+
+
+def delete_cluster(
+    cluster: Cluster,
+) -> None:
+    """
+    Delete the cluster from the GCP project
+    """
+    procs = []
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
-        print(f"=== {available_cluster.value} ===")
         cluster_kube_config = KUBE_CONTEXTS[available_cluster]
-        subprocess.run(
-            [
-                "helm",
-                "--kube-context",
-                cluster_kube_config,
-                "uninstall",
-                available_cluster.value,  # the helm_release is named after the cluster it is in
-            ],
+        procs.append(
+            subprocess.Popen(
+                [
+                    "helm",
+                    "--kube-context",
+                    cluster_kube_config,
+                    "uninstall",
+                    available_cluster.value,  # the helm_release is named after the cluster it is in
+                ],
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+            )
         )
         print()
+
+    for proc in procs:
+        proc.wait()
+        if proc.returncode != 0:
+            print(f"Error deleting cluster workloads: {proc.args}")
+            outs, errs = proc.communicate()
+            print(outs.decode())
+            print(errs.decode())
+            raise SystemExit(1)
 
 
 def get_current_era() -> str:
@@ -575,14 +604,14 @@ def aptos_node_helm_upgrade(
         "--set",
         f"numValidators={num_nodes}",
     ]
-    # delete the previous helm release secret
-    # this removes helm history, but speeds up the apply process substantially
-    core_client = client.CoreV1Api(kube_clients()[cluster])
-    secrets = core_client.list_namespaced_secret(NAMESPACE)
-    for secret in secrets.items:
-        if secret.metadata.name.startswith(f"sh.helm.release.v1.{cluster.value}"):
-            print(f"Deleting previous helm release secret: {secret.metadata.name}")
-            core_client.delete_namespaced_secret(secret.metadata.name, NAMESPACE)
+    # # delete the previous helm release secret
+    # # this removes helm history, but speeds up the apply process substantially
+    # core_client = client.CoreV1Api(kube_clients()[cluster])
+    # secrets = core_client.list_namespaced_secret(NAMESPACE)
+    # for secret in secrets.items:
+    #     if secret.metadata.name.startswith(f"sh.helm.release.v1.{cluster.value}"):
+    #         print(f"Deleting previous helm release secret: {secret.metadata.name}")
+    #         core_client.delete_namespaced_secret(secret.metadata.name, NAMESPACE)
     return subprocess.Popen(
         [
             "helm",
@@ -604,7 +633,7 @@ def aptos_node_helm_upgrade(
     )
 
 
-@main.command("helm-upgrade")
+@main.command("upgrade")
 @click.option(
     "--cluster",
     type=click.Choice([c.value for c in Cluster]),
@@ -627,20 +656,35 @@ def aptos_node_helm_upgrade(
     default=APTOS_NODE_HELM_CHART_DIRECTORY,
 )
 @click.option(
-    "--verbose",
+    "--new",
     is_flag=True,
     default=False,
-    help="Verbose logging",
+    help="Whether to start the cluster from scratch",
 )
-def helm_upgrade(
+def upgrade(
     cluster: str,
     values_file: str,
     helm_chart_directory: str,
-    verbose: bool,
+    new: bool,
 ) -> None:
-    """Helm upgrade all aptos-nodes on the cluster"""
+    """Wipes the cluster and redeploys via helm chart"""
     cluster = Cluster(cluster)
     procs: List[subprocess.Popen] = []
+    # delete the cluster if it exists
+    if new:
+        print("Deleting existing cluster resources first...")
+        try:
+            delete_cluster(cluster)
+        except SystemExit as e:
+            print("The helm release in this cluster may not exist")
+            print("Try upgrading without the --new flag")
+            raise
+
+    else:
+        print("Skipping cluster deletion")
+        print(
+            "This unless your cluster is new or already in a running and healthy state, this might have some unintended consequences"
+        )
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:
             continue
@@ -661,6 +705,9 @@ def helm_upgrade(
             outs, errs = proc.communicate()
             print(outs)
             print(errs)
+            print("Try deleting all helm state and trying again")
+            print("./bin/cluster.py delete")
+            print("./bin/cluster.py upgrade --new")
             raise SystemExit(1)
 
 
@@ -745,7 +792,7 @@ def clean_previous_era_resources(cluster: str) -> None:
     Clean up previous era resources from the given cluster
     """
     # delete the previous era's resources
-    
+
     cluster = Cluster(cluster)
     clean_previous_era_secrets(cluster, CURRENT_ERA)
     clean_previous_era_pvc(cluster, CURRENT_ERA)

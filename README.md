@@ -131,13 +131,13 @@ Authenticate with all GKE clusters
 
 At this point, most of the required infrastructure has been set up. You must now begin the genesis process and start all the Aptos nodes in each kubernetes cluster. As a quick sanity check, visit this URL to view all your active kubernetes clusters within the project https://console.cloud.google.com/kubernetes/list/overview?referrer=search&project=<YOUR_PROJECT_ID>, and confirm that all are in a healthy "green" state. If not, use GKE's tooltips and logs to help debug.
 
-By default, Terraform will also install some baseline Aptos workloads on each of the kubernetes clusters as well. To check these running workloads, run the following from the project root:
+By default, the Terraform modules will also install some baseline Aptos workloads on each of the kubernetes clusters as well (e.g. 1 validator). To check these running workloads, run the following from the project root:
 
 ```
 ./bin/cluster.py kube get pods 
 ```
 
-You will see most pods are in a `ContainerCreating` state. Digging deeper this is because these pods (fullnodes and validators) are waiting for genesis configurations. Genesis has not been run yet, so naturally these pods are pending.
+These workloads will soon be replaced with the following steps, which initializes the benchmark network.
 
 #### Install `aptos` CLI
 
@@ -149,18 +149,25 @@ Also ensure that the CLI is available in the `PATH`.
 
 In this setup, you will mostly be interacting with `aptos_node_helm_values.yaml` to configure the benchmark network as a whole.
 
-Firstly, start all the validators and fullnodes. After this, all the nodes that are brought up will need genesis configs and their keys generated and uploaded to them. We do this step first to warm up the infrastructure:
+Firstly, start all the validators and fullnodes.
 
 ```
-# 1. Helm upgrade the configuration to all clusters (this may take a few minutes)
-time ./bin/cluster.py helm-upgrade
+# 1. This performs a helm upgrade to all clusters to spin up the validators and fullnodes (this may take a few minutes)
+time ./bin/cluster.py upgrade --new
 ```
 
-Check that all LoadBalancers have been provisionined for each validator and fullnode. From the output, check if there are any services that have `<pending>` for their `EXTERNAL-IP`. Wait until all LoadBalancers are brought up before proceeding to the next step.
+You will see most pods are in a `ContainerCreating` state. This is because these pods (fullnodes and validators) are waiting for their keys and genesis configurations, which will be done in a later step.
+
+You might also see some pods in `Pending` state. This is likely due to GKE's underlying autoscaler kicking in. It may take a few minutes for the necessary compute to be available to the cluster. Part of why we install the validators and fullnodes workloads as the first step is to warm up the infrastructure.
+
+In order to progress to the next steps, check that all LoadBalancers have been provisioned for each validator and fullnode. From the output, check if there are any services that have `<pending>` for their `EXTERNAL-IP`. Wait until all LoadBalancers are brought up before proceeding to the next step.
 
 ```
 # 1.1. Filter all kubernetes services by LoadBalancer type, checking for pending
 ./bin/cluster.py kube get svc | grep LoadBalancer
+
+# to continue, this should be zero
+./bin/cluster.py kube get svc | grep -c pending
 ```
 
 To run genesis for the first time:
@@ -179,10 +186,10 @@ After the keys and validator configs are generated, they'll need to be uploaded 
 ./bin/cluster.py genesis upload --apply
 ```
 
-From here onwards, you can use Helm to manage the lifecycle of your nodes. If there is any config change you want to make, you can run helm-upgrade again. If nothing has changed, running it again should be idempotent:
+From here onwards, you can use Helm to manage the lifecycle of your nodes. If there is any config change you want to make, you can run `upgrade` again (NOTE: this time, without `--new`). If nothing has changed, running it again should be idempotent:
 ```
 # 4. Upgrade all nodes (this may take a few minutes)
-time ./bin/cluster.py helm-upgrade
+time ./bin/cluster.py upgrade
 ```
 
 ## Scripts Reference
@@ -214,10 +221,22 @@ Submit load test against the network. The root keypair is hardcoded in genesis. 
 ./bin/cluster.py stop
 ```
 
+#### Delete all workloads in each cluster, e.g. a clean wipe
+
+```
+./bin/cluster.py delete
+```
+
+To bring back the network, you can try: 
+
+```
+./bin/cluster.py upgrade --new
+```
+
+
 #### Wipe the network and start from scratch
 
 To wipe the chain, change the chain's "era" in the helm values in `aptos_node_helm_values.yaml`. This tells the kubernetes workloads to switch their underlying volumes, thus starting the chian from scratch. Then, follow the steps above to [Run genesis](#run-genesis)
-
 
 #### Changing the network size (and starting a new network)
 * Edit `CLUSTERS` in `constants.py` to change the number of validators (and VFNs) in each region. Please note the quota
