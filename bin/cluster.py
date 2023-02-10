@@ -32,27 +32,29 @@ def get_validator_fullnode_host(
     """
     validator_host = ""
     fullnode_host = ""
+    validator_svc_substring = "validator-lb" if HAPROXY_ENABLED else "validator"
+    fullnode_svc_substring = "fullnode-lb" if HAPROXY_ENABLED else "fullnode"
     for service in services.items:
         if node_name in service.metadata.name:
             try:
-                # if "validator-lb" in service.metadata.name: # if haproxy is enabled
-                if "validator" in service.metadata.name:  # if haproxy is not enabled
+                if validator_svc_substring in service.metadata.name:
                     validator_host = service.status.load_balancer.ingress[0].ip
-                    assert validator_host != ""
-                # if "fullnode-lb" in service.metadata.name: # if haproxy is enabled
-                if "fullnode" in service.metadata.name:  # if haproxy is not enabled
+                if fullnode_svc_substring in service.metadata.name:
                     fullnode_host = service.status.load_balancer.ingress[0].ip
-                    assert fullnode_host != ""
 
             except:
                 print(
                     f"Failed to get external LoadBalancer IP for service: {service.metadata.name}"
                 )
-                print("Please check that the service has an IP address")
+                print("Please check that the service has an EXTERNAL-IP address")
                 print(
-                    f"kubectl --context {KUBE_CONTEXTS[cluster]} describe svc {service.metadata.name}"
+                    f"kubectl --context {KUBE_CONTEXTS[cluster]} get svc {service.metadata.name}"
                 )
                 raise SystemExit(1)
+    if validator_host == "" or fullnode_host == "":
+        print(f"Failed to get validator and fullnode hosts for node: {node_name}")
+        print(f"kubectl --context {KUBE_CONTEXTS[cluster]} get svc | grep {node_name}")
+        raise SystemExit(1)
     return ValidatorFullnodeHosts(
         validator_host=validator_host, fullnode_host=fullnode_host
     )
@@ -100,6 +102,7 @@ def auth_all_clusters() -> int:
         if cp.returncode != 0:
             ret = cp.returncode
             print(f"Failed to authenticate with cluster: {cluster}")
+            print("Did you run `terraform apply` for this cluster?")
         else:
             print(f"Successfully authenticated with cluster: {cluster}")
     return ret
@@ -327,30 +330,30 @@ def kube_upload_genesis(
                     text=True,
                 )
 
-            procs.append(
-                subprocess.Popen(
-                    [
-                        "kubectl",
-                        "--context",
-                        cluster_kube_config,
-                        "create",
-                        "secret",
-                        "generic",
-                        f"{node_username}-genesis-e{current_era}",
-                        f"--from-file=genesis.blob={GENESIS_DIRECTORY}/genesis.blob",
-                        f"--from-file=waypoint.txt={GENESIS_DIRECTORY}/waypoint.txt",
-                        f"--from-file=validator-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-identity.yaml",
-                        f"--from-file=validator-full-node-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-full-node-identity.yaml",
-                    ]
-                    + (dry_run_args if not apply else []),
-                    stdout=cluster_genesis_fd,
-                    stderr=subprocess.PIPE,
-                    text=True,
+                procs.append(
+                    subprocess.Popen(
+                        [
+                            "kubectl",
+                            "--context",
+                            cluster_kube_config,
+                            "create",
+                            "secret",
+                            "generic",
+                            f"{node_username}-genesis-e{current_era}",
+                            f"--from-file=genesis.blob={GENESIS_DIRECTORY}/genesis.blob",
+                            f"--from-file=waypoint.txt={GENESIS_DIRECTORY}/waypoint.txt",
+                            f"--from-file=validator-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-identity.yaml",
+                            f"--from-file=validator-full-node-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-full-node-identity.yaml",
+                        ]
+                        + (dry_run_args if not apply else []),
+                        stdout=cluster_genesis_fd,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
                 )
-            )
-            cluster_genesis_fd.flush()
-            cluster_genesis_fd.write(f"---\n")
-            cluster_genesis_fd.flush()
+                cluster_genesis_fd.flush()
+                cluster_genesis_fd.write(f"---\n")
+                cluster_genesis_fd.flush()
 
     # wait for everything
     for proc in procs:
@@ -431,6 +434,7 @@ def patch_node_scale(
     cluster: Cluster,
     node_name: str,
     replicas: int,
+    haproxy_enabled: bool = False,
 ) -> None:
     """
     Patch the node count for the given node
@@ -450,18 +454,14 @@ def patch_node_scale(
                 NAMESPACE,
                 [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
             )
-    try:
+    if haproxy_enabled:
         apps_client.patch_namespaced_deployment_scale(
             f"{long_node_name}-haproxy",
             NAMESPACE,
             [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
         )
-    except:
-        print("No haproxy deployment found")
-        pass
-    print(
-        f"Patched {long_node_name} (haproxy, validator, fullnode) scale to {replicas}"
-    )
+
+    print(f"Patched {long_node_name} scale to {replicas}")
 
 
 @main.command("stop")
@@ -519,6 +519,10 @@ def helm_delete(
     Useful for a hard reset of the network, in case of a bad deploy, such as when helm is stuck in a bad state
     """
     cluster = Cluster(cluster)
+    user_input = input("Delete all existing cluster resources (y/n)? ")
+    if user_input.lower() != "y":
+        print("Aborting delete operation")
+        return
     delete_cluster(cluster)
 
 
@@ -676,18 +680,22 @@ def upgrade(
     procs: List[subprocess.Popen] = []
     # delete the cluster if it exists
     if new:
-        print("Deleting existing cluster resources first...")
+        print()
+        user_input = input(
+            "Delete existing cluster resources before installing network from scratch. This will de-provision all existing LoadBalancers and may take a while. (y/n)? "
+        )
+        if user_input.lower() != "y":
+            print("Aborting upgrade")
+            return
         try:
             delete_cluster(cluster)
         except SystemExit as e:
             print("The helm release in this cluster may not exist")
-            print("Try upgrading without the --new flag")
-            raise
+            print("Continuing with upgrade...")
 
     else:
-        print("Skipping cluster deletion")
         print(
-            "This unless your cluster is new or already in a running and healthy state, this might have some unintended consequences"
+            "Skipping cluster deletion, and reusing cluster state. (Use --new to delete clusters before upgrading)"
         )
     for available_cluster in CLUSTERS:
         if cluster != available_cluster and cluster != Cluster.ALL:

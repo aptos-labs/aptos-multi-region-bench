@@ -32,7 +32,7 @@ NAMESPACE = "default"
 with open(APTOS_NODE_HELM_VALUES_FILE, "r") as genesis_file:
     values = yaml.load(genesis_file, Loader=yaml.FullLoader)
     CURRENT_ERA = values["chain"]["era"]
-    print(f"Loading config: {APTOS_NODE_HELM_VALUES_FILE} era: {CURRENT_ERA}")
+    HAPROXY_ENABLED = bool(values["haproxy"]["enabled"])
 
 LAYOUT = {
     # This is the same testing key as in forge: https://github.com/aptos-labs/aptos-core/blob/main/testsuite/forge/src/backend/k8s/constants.rs#L7-L10
