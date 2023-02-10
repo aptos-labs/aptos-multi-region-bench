@@ -450,11 +450,15 @@ def patch_node_scale(
                 NAMESPACE,
                 [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
             )
-    apps_client.patch_namespaced_deployment_scale(
-        f"{long_node_name}-haproxy",
-        NAMESPACE,
-        [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
-    )
+    try:
+        apps_client.patch_namespaced_deployment_scale(
+            f"{long_node_name}-haproxy",
+            NAMESPACE,
+            [{"op": "replace", "path": "/spec/replicas", "value": replicas}],
+        )
+    except:
+        print("No haproxy deployment found")
+        pass
     print(
         f"Patched {long_node_name} (haproxy, validator, fullnode) scale to {replicas}"
     )
