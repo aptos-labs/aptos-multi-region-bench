@@ -31,8 +31,8 @@ NAMESPACE = "default"
 
 with open(APTOS_NODE_HELM_VALUES_FILE, "r") as genesis_file:
     values = yaml.load(genesis_file, Loader=yaml.FullLoader)
-    current_era = values["chain"]["era"]
-    print(f"Loading config: {APTOS_NODE_HELM_VALUES_FILE} era: {current_era}")
+    CURRENT_ERA = values["chain"]["era"]
+    print(f"Loading config: {APTOS_NODE_HELM_VALUES_FILE} era: {CURRENT_ERA}")
 
 LAYOUT = {
     # This is the same testing key as in forge: https://github.com/aptos-labs/aptos-core/blob/main/testsuite/forge/src/backend/k8s/constants.rs#L7-L10
@@ -44,7 +44,7 @@ LAYOUT = {
         for i in range(CLUSTERS[cluster])
     ],
     "chain_id": int(
-        current_era
+        CURRENT_ERA
     ),  # NOTE: the chain_id changes for each era to prevent new nodes from connecting to old chain as its shutting down
     "allow_new_validators": True,
     "epoch_duration_secs": 7200,

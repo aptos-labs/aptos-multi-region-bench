@@ -6,6 +6,7 @@ from enum import Enum
 import json
 
 import subprocess
+import time
 from typing import List, Tuple
 
 import click
@@ -35,10 +36,10 @@ def get_validator_fullnode_host(
         if node_name in service.metadata.name:
             try:
                 # if "validator-lb" in service.metadata.name: # if haproxy is enabled
-                if "validator" in service.metadata.name: # if haproxy is not enabled
+                if "validator" in service.metadata.name:  # if haproxy is not enabled
                     validator_host = service.status.load_balancer.ingress[0].ip
                 # if "fullnode-lb" in service.metadata.name: # if haproxy is enabled
-                if "fullnode" in service.metadata.name: # if haproxy is not enabled
+                if "fullnode" in service.metadata.name:  # if haproxy is not enabled
                     fullnode_host = service.status.load_balancer.ingress[0].ip
 
             except (IndexError, TypeError):
@@ -71,7 +72,9 @@ def get_validator_fullnode_hosts(
     num_nodes = CLUSTERS[cluster]
     for node in range(num_nodes):
         node_name = f"node-{node}"
-        validator_fullnode_hosts = get_validator_fullnode_host(cluster, services, node_name)
+        validator_fullnode_hosts = get_validator_fullnode_host(
+            cluster, services, node_name
+        )
         validator_fullnode_hosts_list.append(validator_fullnode_hosts)
 
     assert len(validator_fullnode_hosts_list) == num_nodes
@@ -294,6 +297,7 @@ def kube_upload_genesis(
         # wipe the previous eras stuff too
         clean_previous_era_secrets(available_cluster, current_era)
         clean_previous_era_pvc(available_cluster, current_era)
+        clean_previous_era_stateful_set(available_cluster, current_era)
 
         for i in range(nodes_per_cluster):
             node_name = f"aptos-node-{i}"
@@ -488,6 +492,7 @@ def kube_start(
             node_name = f"aptos-node-{i}"
             patch_node_scale(available_cluster, node_name, 1)
 
+
 @main.command("delete")
 @click.option(
     "--cluster",
@@ -514,7 +519,7 @@ def helm_delete(
                 "--kube-context",
                 cluster_kube_config,
                 "uninstall",
-                available_cluster.value # the helm_release is named after the cluster it is in
+                available_cluster.value,  # the helm_release is named after the cluster it is in
             ],
         )
         print()
@@ -570,6 +575,14 @@ def aptos_node_helm_upgrade(
         "--set",
         f"numValidators={num_nodes}",
     ]
+    # delete the previous helm release secret
+    # this removes helm history, but speeds up the apply process substantially
+    core_client = client.CoreV1Api(kube_clients()[cluster])
+    secrets = core_client.list_namespaced_secret(NAMESPACE)
+    for secret in secrets.items:
+        if secret.metadata.name.startswith(f"sh.helm.release.v1.{cluster.value}"):
+            print(f"Deleting previous helm release secret: {secret.metadata.name}")
+            core_client.delete_namespaced_secret(secret.metadata.name, NAMESPACE)
     return subprocess.Popen(
         [
             "helm",
@@ -613,10 +626,17 @@ def aptos_node_helm_upgrade(
     help="Path to the helm chart directory",
     default=APTOS_NODE_HELM_CHART_DIRECTORY,
 )
+@click.option(
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Verbose logging",
+)
 def helm_upgrade(
     cluster: str,
     values_file: str,
     helm_chart_directory: str,
+    verbose: bool,
 ) -> None:
     """Helm upgrade all aptos-nodes on the cluster"""
     cluster = Cluster(cluster)
@@ -720,21 +740,17 @@ def clean_previous_era_stateful_set(cluster: Cluster, era: str) -> None:
     default=Cluster.ALL.value,
     help="Cluster to run the command on",
 )
-@click.option(
-    "--era",
-    type=str,
-    help="The current era. Everything else will be cleaned up other than this era",
-    required=True,
-)
-def clean_previous_era_resources(cluster: str, era: str) -> None:
+def clean_previous_era_resources(cluster: str) -> None:
     """
     Clean up previous era resources from the given cluster
     """
     # delete the previous era's resources
+    
     cluster = Cluster(cluster)
-    clean_previous_era_secrets(cluster, era)
-    clean_previous_era_pvc(cluster, era)
-    clean_previous_era_stateful_set(cluster, era)
+    clean_previous_era_secrets(cluster, CURRENT_ERA)
+    clean_previous_era_pvc(cluster, CURRENT_ERA)
+    clean_previous_era_stateful_set(cluster, CURRENT_ERA)
+
 
 @main.command("show-max-resources")
 @click.option(
@@ -761,24 +777,24 @@ def show_max_resources(cluster: str) -> None:
         for daemonset in daemonsets.items:
             try:
                 sum_all_memory_requests += int(
-                    daemonset.spec.template.spec.containers[0].resources.requests[
-                        "memory"
-                    ].replace("Mi", "")
+                    daemonset.spec.template.spec.containers[0]
+                    .resources.requests["memory"]
+                    .replace("Mi", "")
                 )
                 sum_all_cpu_requests += int(
-                    daemonset.spec.template.spec.containers[0].resources.requests[
-                        "cpu"
-                    ].replace("m", "")
+                    daemonset.spec.template.spec.containers[0]
+                    .resources.requests["cpu"]
+                    .replace("m", "")
                 )
                 sum_all_memory_limits += int(
-                    daemonset.spec.template.spec.containers[0].resources.limits[
-                        "memory"
-                    ].replace("Mi", "")
+                    daemonset.spec.template.spec.containers[0]
+                    .resources.limits["memory"]
+                    .replace("Mi", "")
                 )
                 sum_all_cpu_limits += int(
-                    daemonset.spec.template.spec.containers[0].resources.limits[
-                        "cpu"
-                    ].replace("m", "")
+                    daemonset.spec.template.spec.containers[0]
+                    .resources.limits["cpu"]
+                    .replace("m", "")
                 )
             except (KeyError, TypeError):
                 print("No resource info for daemonset")
@@ -788,7 +804,6 @@ def show_max_resources(cluster: str) -> None:
         print(
             f"Total cpu requests: {sum_all_cpu_requests}m, Total cpu limits: {sum_all_cpu_limits}m"
         )
-
 
 
 if __name__ == "__main__":

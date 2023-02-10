@@ -36,8 +36,9 @@ module "aptos-node" {
   # Autoscaling configuration
   gke_enable_autoscaling               = false
   gke_enable_node_autoprovisioning     = true
-  gke_node_autoprovisioning_max_cpu    = 32 * 100 # space for at least 100 nodes
-  gke_node_autoprovisioning_max_memory = 128 * 100
+  # space for at least 100 k8s worker nodes, assuming 48 vCPU and 192 GB RAM per node
+  gke_node_autoprovisioning_max_cpu    = 48 * 100
+  gke_node_autoprovisioning_max_memory = 192 * 100
 }
 
 resource "local_file" "kubectx" {
