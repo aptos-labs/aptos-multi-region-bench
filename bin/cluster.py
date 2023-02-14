@@ -722,7 +722,7 @@ def upgrade(
         raise SystemExit(1)
 
     print("======== SUCCESS ========")
-    print(f"To view the cluster, run: ./bin/cluster.py get pods")
+    print(f"To view the cluster, run: ./bin/cluster.py kube get pods")
 
 
 def clean_previous_era_secrets(cluster: Cluster, era: str) -> None:

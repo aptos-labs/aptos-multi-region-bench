@@ -3,7 +3,7 @@ imageTag: performance_0704776e507d62c9704829e150b912d94b318d4f # change this to 
 chain:
   chain_id: TESTING
   chain_name: aptos-multi-region-bench
-  era: 81 # bump this to wipe the chain
+  era: 84 # bump this to wipe the chain
 
 # haproxy disabled, and hit the validators and VFN LBs directly
 # If you want to enable haproxy, you may want to change the validator and fullnode
@@ -58,9 +58,23 @@ validator:
     class: ssd
     size: 1000Gi
   config:
+    consensus:
+      max_sending_block_txns: 10000
+      max_receiving_block_txns: 11000
+      max_sending_block_bytes: 6000000
+      max_receiving_block_bytes: 10000000
     execution:
       processed_transactions_detailed_counters: true
       concurrency_level: 24
+    state_sync:
+      state_sync_driver:
+          bootstrapping_mode: ApplyTransactionOutputsFromGenesis
+          continuous_syncing_mode: ApplyTransactionOutputs
+      storage_service:
+          max_transaction_output_chunk_size: 8000
+      data_streaming_service:
+          max_concurrent_requests: 15
+
 
 # the VFN configuration
 fullnode:
@@ -86,11 +100,11 @@ fullnode:
     repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
   resources:
     limits:
-      cpu: "13"
-      memory: 32Gi
+      cpu: "42"
+      memory: 64Gi
     requests:
-      cpu: "13"
-      memory: 32Gi
+      cpu: "42"
+      memory: 64Gi
   storage:
     class: ssd
     size: 1000Gi
