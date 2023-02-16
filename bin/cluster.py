@@ -711,14 +711,16 @@ def upgrade(
 
     # wait for everything
     ret = 0
+    sample_failed_process = None
     for proc in procs:
         proc.wait()
         if proc.returncode != 0:
             ret = proc.returncode
+            sample_failed_process = proc
 
     if ret != 0:
-        print(f"Error upgrading helm chart for cluster {proc.args[3]}")
-        outs, errs = proc.communicate()
+        print(f"Error upgrading helm chart for cluster {sample_failed_process.args[3]}")
+        outs, errs = sample_failed_process.communicate()
         print(outs)
         print(errs)
         print("Try deleting all helm state and trying again")
