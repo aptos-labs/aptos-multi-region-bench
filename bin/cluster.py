@@ -602,7 +602,7 @@ def get_current_era() -> str:
     return cluster_era
 
 
-def aptos_node_helm_upgrade(
+def aptos_node_helm_template(
     cluster: Cluster, helm_chart_directory: str, values_file: str
 ) -> Tuple[Cluster, int]:
     num_nodes = CLUSTERS[cluster]
@@ -621,23 +621,8 @@ def aptos_node_helm_upgrade(
     #         print(f"Deleting previous helm release secret: {secret.metadata.name}")
     #         core_client.delete_namespaced_secret(secret.metadata.name, NAMESPACE)
     return subprocess.Popen(
-        [
-            "helm",
-            "--kube-context",
-            KUBE_CONTEXTS[cluster],
-            "upgrade",
-            "--force",
-            "--history-max=2",
-            "--install",
-            cluster.value,  # the helm_release is named after the cluster it is in
-            helm_chart_directory,  # the helm chart version is that of the subdirectory
-            "-f",
-            values_file,
-            *helm_upgrade_override_values,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+        f"helm --kube-context={KUBE_CONTEXTS[cluster]} template {cluster.value} {helm_chart_directory} -f={values_file} {' '.join(helm_upgrade_override_values)} > helm-template-{cluster.value}.yaml",
+        shell=True,
     )
 
 
@@ -704,7 +689,7 @@ def upgrade(
             f"Upgrading aptos-node helm release for cluster {available_cluster.value}"
         )
         procs.append(
-            aptos_node_helm_upgrade(
+            aptos_node_helm_template(
                 available_cluster, helm_chart_directory, values_file
             )
         )
@@ -718,12 +703,21 @@ def upgrade(
             ret = proc.returncode
             sample_failed_process = proc
 
-    if ret != 0:
+    if ret == 0:
+        print("\nHelm template successful. To apply:")
+        for available_cluster in CLUSTERS:
+            if cluster != available_cluster and cluster != Cluster.ALL:
+                continue
+            print(f"kubectl apply -f helm-template-{available_cluster.value}.yaml")
+        return
+    elif ret != 0:
         print(f"Error upgrading helm chart for cluster {sample_failed_process.args[3]}")
         outs, errs = sample_failed_process.communicate()
         print(outs)
-        if "another operation" in outs: # probably pending-upgrade or failed
-            print("Another helm operation is in progress. Try again later or try helm rollback")
+        if "another operation" in outs:  # probably pending-upgrade or failed
+            print(
+                "Another helm operation is in progress. Try again later or try helm rollback"
+            )
             raise SystemExit(1)
         else:
             print(errs)

@@ -39,3 +39,5 @@ kubectx.sh
 
 .terraform.lock.hcl
 backend.tfvars
+
+helm-template*.yaml
