@@ -46,7 +46,7 @@ validator:
                   - aptos-node
           topologyKey: kubernetes.io/hostname
   image:
-    repo: aptoslabs/validator
+    repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
   resources:
     limits:
       cpu: "42"
@@ -83,7 +83,7 @@ fullnode:
                   - aptos-node
           topologyKey: kubernetes.io/hostname
   image:
-    repo: aptoslabs/validator
+    repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
   resources:
     limits:
       cpu: "13"
