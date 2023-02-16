@@ -722,11 +722,15 @@ def upgrade(
         print(f"Error upgrading helm chart for cluster {sample_failed_process.args[3]}")
         outs, errs = sample_failed_process.communicate()
         print(outs)
-        print(errs)
-        print("Try deleting all helm state and trying again")
-        print("./bin/cluster.py delete")
-        print("./bin/cluster.py upgrade --new")
-        raise SystemExit(1)
+        if "another operation" in outs: # probably pending-upgrade or failed
+            print("Another helm operation is in progress. Try again later or try helm rollback")
+            raise SystemExit(1)
+        else:
+            print(errs)
+            print("Try deleting all helm state and trying again")
+            print("./bin/cluster.py delete")
+            print("./bin/cluster.py upgrade --new")
+            raise SystemExit(1)
 
 
 def clean_previous_era_secrets(cluster: Cluster, era: str) -> None:
