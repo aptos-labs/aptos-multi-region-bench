@@ -710,17 +710,21 @@ def upgrade(
         )
 
     # wait for everything
+    ret = 0
     for proc in procs:
         proc.wait()
         if proc.returncode != 0:
-            print(f"Error upgrading helm chart for cluster {proc.args[3]}")
-            outs, errs = proc.communicate()
-            print(outs)
-            print(errs)
-            print("Try deleting all helm state and trying again")
-            print("./bin/cluster.py delete")
-            print("./bin/cluster.py upgrade --new")
-            raise SystemExit(1)
+            ret = proc.returncode
+
+    if ret != 0:
+        print(f"Error upgrading helm chart for cluster {proc.args[3]}")
+        outs, errs = proc.communicate()
+        print(outs)
+        print(errs)
+        print("Try deleting all helm state and trying again")
+        print("./bin/cluster.py delete")
+        print("./bin/cluster.py upgrade --new")
+        raise SystemExit(1)
 
 
 def clean_previous_era_secrets(cluster: Cluster, era: str) -> None:
