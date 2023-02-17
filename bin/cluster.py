@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from enum import Enum
 import json
 
 import subprocess
-import time
+from multiprocessing import Pool, freeze_support
 from typing import List, Tuple
 
 import click
@@ -51,9 +50,19 @@ def get_validator_fullnode_host(
                     f"kubectl --context {KUBE_CONTEXTS[cluster]} get svc {service.metadata.name}"
                 )
                 raise SystemExit(1)
-    if validator_host == "" or fullnode_host == "":
-        print(f"Failed to get validator and fullnode hosts for node: {node_name}")
-        print(f"kubectl --context {KUBE_CONTEXTS[cluster]} get svc | grep {node_name}")
+    missing_validator_host = validator_host == ""
+    missing_fullnode_host = fullnode_host == ""
+    if missing_validator_host:
+        print(f"Failed to get validator host for node: {node_name}")
+        print(
+            f"kubectl --context {KUBE_CONTEXTS[cluster]} get svc | grep {node_name}-validator"
+        )
+    if missing_fullnode_host:
+        print(f"Failed to get fullnode host for node: {node_name}")
+        print(
+            f"kubectl --context {KUBE_CONTEXTS[cluster]} get svc | grep {node_name}-fullnode"
+        )
+    if missing_fullnode_host or missing_validator_host:
         raise SystemExit(1)
     return ValidatorFullnodeHosts(
         validator_host=validator_host, fullnode_host=fullnode_host
@@ -138,19 +147,17 @@ def auth() -> None:
 def generate_keys_for_genesis(cli_path: str = "") -> None:
     procs: List[subprocess.Popen] = []
     for cluster, nodes_per_cluster in CLUSTERS.items():
+        print(
+            f"Generating keys for {nodes_per_cluster} validators in cluster: {cluster.value}"
+        )
         for i in range(nodes_per_cluster):
             node_name = f"aptos-node-{i}"
             procs.append(
                 subprocess.Popen(
-                    [
-                        f"{cli_path}aptos",
-                        "genesis",
-                        "generate-keys",
-                        "--output-dir",
-                        f"{GENESIS_DIRECTORY}/{cluster.value}-{node_name}",
-                    ],
+                    f"yes | {cli_path}aptos genesis generate-keys --output-dir {GENESIS_DIRECTORY}/{cluster.value}-{node_name}",
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    shell=True,
                     text=True,
                 )
             )
@@ -163,6 +170,8 @@ def generate_keys_for_genesis(cli_path: str = "") -> None:
             print(outs)
             print(errs)
             raise SystemExit(1)
+
+    print("Successfully generated keys for genesis")
 
 
 def set_validator_configuration_for_genesis(cli_path: str = "") -> None:
@@ -230,20 +239,20 @@ def genesis() -> None:
     help="Regenerate keys for genesis. Reuse files on disk if unset",
 )
 @click.option(
-    "--set-validator-config",
-    is_flag=True,
-    default=False,
-    help="Set validator config. Reuse files on disk if unset",
-)
-@click.option(
     "--cli-path",
     default="",
     help="Path to the aptos CLI executable",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Create the genesis but do not upload to the relevant k8s clusters",
+)
 def create_genesis(
     generate_keys: bool = False,
-    set_validator_config: bool = False,
     cli_path: str = "",
+    dry_run: bool = False,
 ) -> None:
     """
     Create genesis for the network and write it to the genesis directory
@@ -254,9 +263,10 @@ def create_genesis(
         generate_keys_for_genesis(cli_path)
 
     # set the validator configuration for each node
-    if set_validator_config:
-        print("Setting validator configuration for genesis via aptos CLI")
-        set_validator_configuration_for_genesis(cli_path)
+    # this will fetch the public keys from the keys directory
+    # and the public IPs from the LoadBalancer services on each of the k8s clusters
+    print("Setting validator configuration for genesis via aptos CLI")
+    set_validator_configuration_for_genesis(cli_path)
 
     # create the layout file
     with open("genesis/layout.yaml", "w") as outfile:
@@ -265,30 +275,12 @@ def create_genesis(
     # create genesis
     subprocess.run(
         [
-            f"{cli_path}aptos",
-            "genesis",
-            "generate-genesis",
-            "--local-repository-dir",
-            GENESIS_DIRECTORY,
-            "--output-dir",
-            GENESIS_DIRECTORY,
-        ]
+            f"yes | {cli_path}aptos genesis generate-genesis --local-repository-dir {GENESIS_DIRECTORY} --output-dir {GENESIS_DIRECTORY}",
+        ],
+        shell=True,
     )
 
-
-@genesis.command("upload")
-@click.option(
-    "--apply",
-    is_flag=True,
-    default=False,
-    help="Apply the genesis secrets to the relevant k8s clusters",
-)
-def kube_upload_genesis(
-    apply: bool = False,
-) -> None:
-    """
-    Upload genesis kubernetes secrets for each validator
-    """
+    # apply
     dry_run_args = ["--dry-run=client", "--output=yaml"]
 
     # current_era = get_current_era()
@@ -313,8 +305,8 @@ def kube_upload_genesis(
             node_name = f"aptos-node-{i}"
             node_username = f"{available_cluster.value}-{node_name}"
 
-            # delete if found in apply mode
-            if apply:
+            # delete if fnot in dry-run mode
+            if not dry_run:
                 subprocess.run(
                     [
                         "kubectl",
@@ -345,7 +337,7 @@ def kube_upload_genesis(
                             f"--from-file=validator-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-identity.yaml",
                             f"--from-file=validator-full-node-identity.yaml={GENESIS_DIRECTORY}/{node_username}/validator-full-node-identity.yaml",
                         ]
-                        + (dry_run_args if not apply else []),
+                        + (dry_run_args if dry_run else []),
                         stdout=cluster_genesis_fd,
                         stderr=subprocess.PIPE,
                         text=True,
@@ -364,6 +356,9 @@ def kube_upload_genesis(
             print(outs)
             print(errs)
             raise SystemExit(1)
+
+    print("Genesis secrets uploaded to nodes")
+    print("Enjoy your multi-cluster testnet!")
 
 
 @main.command("kube")
@@ -603,7 +598,7 @@ def get_current_era() -> str:
 
 
 def aptos_node_helm_template(
-    cluster: Cluster, helm_chart_directory: str, values_file: str
+    cluster: Cluster, helm_chart_directory: str, values_file: str, dry_run: bool = False
 ) -> Tuple[Cluster, int]:
     num_nodes = CLUSTERS[cluster]
     helm_upgrade_override_values = [
@@ -612,18 +607,29 @@ def aptos_node_helm_template(
         "--set",
         f"numValidators={num_nodes}",
     ]
-    # # delete the previous helm release secret
-    # # this removes helm history, but speeds up the apply process substantially
-    # core_client = client.CoreV1Api(kube_clients()[cluster])
-    # secrets = core_client.list_namespaced_secret(NAMESPACE)
-    # for secret in secrets.items:
-    #     if secret.metadata.name.startswith(f"sh.helm.release.v1.{cluster.value}"):
-    #         print(f"Deleting previous helm release secret: {secret.metadata.name}")
-    #         core_client.delete_namespaced_secret(secret.metadata.name, NAMESPACE)
-    return subprocess.Popen(
-        f"helm --kube-context={KUBE_CONTEXTS[cluster]} template {cluster.value} {helm_chart_directory} -f={values_file} {' '.join(helm_upgrade_override_values)} > helm-template-{cluster.value}.yaml",
+    proc = subprocess.Popen(
+        f"helm --kube-context={KUBE_CONTEXTS[cluster]} template {cluster.value} {helm_chart_directory} -f={values_file} {' '.join(helm_upgrade_override_values)} > helm-template-{cluster.value}.yaml;"
+        + f"kubectl --context={KUBE_CONTEXTS[cluster]} apply -f helm-template-{cluster.value}.yaml"
+        if not dry_run
+        else "",
         shell=True,
+        stdout=subprocess.PIPE,
     )
+
+    if dry_run:
+        print(
+            f"[DRY RUN {cluster.value}] To apply it: $ kubectl --context={KUBE_CONTEXTS[cluster]} apply -f helm-template-{cluster.value}.yaml"
+        )
+
+    for line in iter(proc.stdout.readline, b""):
+        line = line.decode("utf-8")
+        if "unchanged" in line:
+            continue
+        print(f"[{cluster.value}] {line}", flush=True)
+
+    proc.communicate()
+
+    return (cluster, proc.returncode)
 
 
 @main.command("upgrade")
@@ -654,15 +660,22 @@ def aptos_node_helm_template(
     default=False,
     help="Whether to start the cluster from scratch",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Create the genesis but do not upload to the relevant k8s clusters",
+)
 def upgrade(
     cluster: str,
     values_file: str,
     helm_chart_directory: str,
     new: bool,
+    dry_run: bool,
 ) -> None:
     """Wipes the cluster and redeploys via helm chart"""
     cluster = Cluster(cluster)
-    procs: List[subprocess.Popen] = []
+    procs: List[Tuple[Cluster, subprocess.Popen]] = []
     # delete the cluster if it exists
     if new:
         print()
@@ -682,49 +695,34 @@ def upgrade(
         print(
             "Skipping cluster deletion, and reusing cluster state. (Use --new to delete clusters before upgrading)"
         )
-    for available_cluster in CLUSTERS:
-        if cluster != available_cluster and cluster != Cluster.ALL:
-            continue
-        print(
-            f"Upgrading aptos-node helm release for cluster {available_cluster.value}"
-        )
-        procs.append(
-            aptos_node_helm_template(
-                available_cluster, helm_chart_directory, values_file
-            )
+    num_clusters = len(CLUSTERS) if cluster == Cluster.ALL else 1
+    with Pool(num_clusters) as p:
+        all_upgrades = p.starmap(
+            aptos_node_helm_template,
+            [
+                (
+                    available_cluster,
+                    helm_chart_directory,
+                    values_file,
+                    dry_run,
+                )
+                for available_cluster in CLUSTERS
+                if cluster == available_cluster or cluster == Cluster.ALL
+            ],
         )
 
-    # wait for everything
-    ret = 0
-    sample_failed_process = None
-    for proc in procs:
-        proc.wait()
-        if proc.returncode != 0:
-            ret = proc.returncode
-            sample_failed_process = proc
+    err = False
+    for upgraded_cluster, return_code in all_upgrades:
+        if return_code != 0:
+            print("======== ERROR ========")
+            print(f"ERROR: cluster {upgraded_cluster} failed (exit {return_code})")
+            err = True
 
-    if ret == 0:
-        print("\nHelm template successful. To apply:")
-        for available_cluster in CLUSTERS:
-            if cluster != available_cluster and cluster != Cluster.ALL:
-                continue
-            print(f"kubectl apply -f helm-template-{available_cluster.value}.yaml")
-        return
-    elif ret != 0:
-        print(f"Error upgrading helm chart for cluster {sample_failed_process.args[3]}")
-        outs, errs = sample_failed_process.communicate()
-        print(outs)
-        if "another operation" in outs:  # probably pending-upgrade or failed
-            print(
-                "Another helm operation is in progress. Try again later or try helm rollback"
-            )
-            raise SystemExit(1)
-        else:
-            print(errs)
-            print("Try deleting all helm state and trying again")
-            print("./bin/cluster.py delete")
-            print("./bin/cluster.py upgrade --new")
-            raise SystemExit(1)
+    if err:
+        raise SystemExit(1)
+
+    print("======== SUCCESS ========")
+    print(f"To view the cluster, run: ./bin/cluster.py get pods")
 
 
 def clean_previous_era_secrets(cluster: Cluster, era: str) -> None:

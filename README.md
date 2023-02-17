@@ -170,20 +170,9 @@ In order to progress to the next steps, check that all LoadBalancers have been p
 ./bin/cluster.py kube get svc | grep -c pending
 ```
 
-To run genesis for the first time:
+To run genesis for the first time, execute the below command. This will generate keys and get the public IP for each of the validators and fullnodes and then generate a genesis and waypoint. These will then be uploaded to each node (via kubernetes) for startup
 ```
-# 2. You have a few options here
-
-# a. (RECOMMENDED) re-generate keys and re-fetch the external IPs for validator config
-yes | ./bin/cluster.py genesis create --generate-keys --set-validator-config
-# b. to set validator config without generating new keys
-yes | ./bin/cluster.py genesis create --set-validator-config
-```
-
-After the keys and validator configs are generated, they'll need to be uploaded to each node (via kubernetes) for startup:
-```
-# 3. Upload genesis configs to each node for startup
-./bin/cluster.py genesis upload --apply
+./bin/cluster.py genesis create --generate-keys
 ```
 
 From here onwards, you can use Helm to manage the lifecycle of your nodes. If there is any config change you want to make, you can run `upgrade` again (NOTE: this time, without `--new`). If nothing has changed, running it again should be idempotent:
