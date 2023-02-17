@@ -3,7 +3,7 @@ imageTag: performance_0704776e507d62c9704829e150b912d94b318d4f # change this to 
 chain:
   chain_id: TESTING
   chain_name: aptos-multi-region-bench
-  era: 80 # bump this to wipe the chain
+  era: 81 # bump this to wipe the chain
 
 # haproxy disabled, and hit the validators and VFN LBs directly
 # If you want to enable haproxy, you may want to change the validator and fullnode

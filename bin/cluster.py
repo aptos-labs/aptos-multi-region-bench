@@ -622,7 +622,7 @@ def aptos_node_helm_template(
         )
 
     for line in iter(proc.stdout.readline, b""):
-        line = line.decode("utf-8")
+        line = line.decode("utf-8").strip()
         if "unchanged" in line:
             continue
         print(f"[{cluster.value}] {line}", flush=True)
