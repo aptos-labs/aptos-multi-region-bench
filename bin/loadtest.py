@@ -6,7 +6,15 @@ from typing import List, Optional, Sequence, Tuple, TypedDict
 import click
 import yaml
 from cluster import get_validator_fullnode_hosts
-from constants import CLUSTERS, KUBE_CONTEXTS, LOADTEST_POD_SPEC, LOADTEST_POD_NAME, LOADTEST_CLUSTERS
+from constants import (
+    CLUSTERS,
+    KUBE_CONTEXTS,
+    LOADTEST_POD_SPEC,
+    LOADTEST_POD_NAME,
+    LOADTEST_CLUSTERS,
+)
+
+REST_API_PORT = 8080
 
 
 class Metadata(TypedDict):
@@ -105,7 +113,18 @@ def build_loadtest_command(
         f"--duration={loadtestConfig['duration']}",
         "--txn-expiration-time-secs=" f"{loadtestConfig['txn_expiration_time_secs']}",
         "--max-transactions-per-account=5",
-        *(["--transaction-type", "coin-transfer"] if loadtestConfig['coin_transfer'] else ["--transaction-type" , "account-generation-large-pool", "create-new-resource", "--transaction-phases", "0", "1"]),
+        *(
+            ["--transaction-type", "coin-transfer"]
+            if loadtestConfig["coin_transfer"]
+            else [
+                "--transaction-type",
+                "account-generation-large-pool",
+                "create-new-resource",
+                "--transaction-phases",
+                "0",
+                "1",
+            ]
+        ),
     ]
 
 
@@ -128,8 +147,8 @@ def automatically_determine_targets(clusters: List[str]) -> List[str]:
     for cluster in clusters:
         validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
         for host in validator_fullnode_hosts_cluster_list:
-            # targets.append(f"http://{host.validator_host}:80")
-            targets.append(f"http://{host.fullnode_host}:80")
+            # targets.append(f"http://{host.validator_host}:{REST_API_PORT}")
+            targets.append(f"http://{host.fullnode_host}:{REST_API_PORT}")
 
     return targets
 
@@ -296,7 +315,10 @@ def main(
         config: LoadTestConfig = {
             "mint_key": mint_key,
             "chain_id": chain_id,
-            "targets": target or automatically_determine_targets([cluster] if only_within_cluster else list(CLUSTERS)),
+            "targets": target
+            or automatically_determine_targets(
+                [cluster] if only_within_cluster else list(CLUSTERS)
+            ),
             "target_tps": target_tps,
             "duration": duration,
             "mempool_backlog": mempool_backlog,
@@ -304,7 +326,7 @@ def main(
             "coin_transfer": coin_transfer,
         }
         spec = configure_loadtest(template, config)
-        spec_file = f"{cluster}_{LOADTEST_POD_SPEC}"
+        spec_file = f"{cluster.value}_{LOADTEST_POD_SPEC}"
         with open(spec_file, "w") as f:
             f.write(yaml.dump(spec))
             print(f"Wrote pod spec to {spec_file}")
