@@ -56,7 +56,7 @@ def build_pod_template() -> PodTemplate:
             "containers": [
                 {
                     "name": LOADTEST_POD_NAME,
-                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_47ff9fe7341fcacd4c09b892faf834bdb1f2c1a1",
+                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_7c85e3375b1e739f5c26d4df7767d96871e53bd3",
                     "env": [
                         {
                             "name": "RUST_BACKTRACE",
@@ -111,6 +111,7 @@ def build_loadtest_command(
             else f"--mempool-backlog={loadtestConfig['mempool_backlog']}"
         ],
         f"--duration={loadtestConfig['duration']}",
+        f"--delay-after-minting=300",
         "--txn-expiration-time-secs=" f"{loadtestConfig['txn_expiration_time_secs']}",
         "--max-transactions-per-account=5",
         *(
@@ -147,8 +148,8 @@ def automatically_determine_targets(clusters: List[str]) -> List[str]:
     for cluster in clusters:
         validator_fullnode_hosts_cluster_list = get_validator_fullnode_hosts(cluster)
         for host in validator_fullnode_hosts_cluster_list:
-            # targets.append(f"http://{host.validator_host}:{REST_API_PORT}")
-            targets.append(f"http://{host.fullnode_host}:{REST_API_PORT}")
+            targets.append(f"http://{host.validator_host}:{REST_API_PORT}")
+            # targets.append(f"http://{host.fullnode_host}:{REST_API_PORT}")
 
     return targets
 
@@ -159,7 +160,7 @@ def apply_spec(delete=False, only_asia=False) -> None:
     # TODO: implement some target cluster filtering
     procs: List[subprocess.Popen] = []
     for cluster in CLUSTERS:
-        spec_file = f"{cluster}_{LOADTEST_POD_SPEC}"
+        spec_file = f"{cluster.value}_{LOADTEST_POD_SPEC}"
 
         print(f"Applying loadtest spec to {cluster}...")
         cluster_kube_config = KUBE_CONTEXTS[cluster]
@@ -324,6 +325,7 @@ def main(
             "mempool_backlog": mempool_backlog,
             "txn_expiration_time_secs": txn_expiration_time_secs,
             "coin_transfer": coin_transfer,
+            "delay_after_minting": 300,
         }
         spec = configure_loadtest(template, config)
         spec_file = f"{cluster.value}_{LOADTEST_POD_SPEC}"
