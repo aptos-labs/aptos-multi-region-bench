@@ -1,9 +1,9 @@
-imageTag: performance_0704776e507d62c9704829e150b912d94b318d4f # change this to the docker image tag you want
+imageTag: performance_0d37cce89361ef80b87655bbe50a42944e626715 # change this to the docker image tag you want
 
 chain:
   chain_id: TESTING
   chain_name: aptos-multi-region-bench
-  era: 84 # bump this to wipe the chain
+  era: 7 # bump this to wipe the chain
 
 # haproxy disabled, and hit the validators and VFN LBs directly
 # If you want to enable haproxy, you may want to change the validator and fullnode
@@ -60,21 +60,32 @@ validator:
   config:
     consensus:
       max_sending_block_txns: 10000
-      max_receiving_block_txns: 11000
-      max_sending_block_bytes: 6000000
-      max_receiving_block_bytes: 10000000
+      max_receiving_block_txns: 16000
+      max_sending_block_bytes: 10000000
+      max_receiving_block_bytes: 15000000
+      quorum_store_configs: 
+        max_batch_counts: 300
+        mempool_txn_pull_max_count: 300
+        mempool_txn_pull_max_bytes: 1000000
+        back_pressure_local_batch_num: 10
     execution:
       processed_transactions_detailed_counters: true
       concurrency_level: 24
     state_sync:
       state_sync_driver:
-          bootstrapping_mode: ApplyTransactionOutputsFromGenesis
-          continuous_syncing_mode: ApplyTransactionOutputs
+        bootstrapping_mode: ApplyTransactionOutputsFromGenesis
+        continuous_syncing_mode: ApplyTransactionOutputs
       storage_service:
-          max_transaction_output_chunk_size: 8000
+        max_network_chunk_bytes: 20971520
+        max_transaction_output_chunk_size: 5000
       data_streaming_service:
-          max_concurrent_requests: 15
-
+        max_concurrent_requests: 20
+    storage:
+      rocksdb_configs:
+        use_state_kv_db: true
+    validator_network:
+      max_frame_size: 20971520
+        
 
 # the VFN configuration
 fullnode:
@@ -113,3 +124,6 @@ fullnode:
       max_submit_transaction_batch_size: 100
     execution:
       processed_transactions_detailed_counters: true
+    storage:
+      rocksdb_configs:
+        use_state_kv_db: true

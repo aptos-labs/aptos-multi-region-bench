@@ -6,7 +6,7 @@ import json
 
 import subprocess
 from multiprocessing import Pool, freeze_support
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import click
 import yaml
@@ -429,6 +429,7 @@ def patch_node_scale(
     cluster: Cluster,
     node_name: str,
     replicas: int,
+    vfn_enabled: bool,
     haproxy_enabled: bool = False,
 ) -> None:
     """
@@ -442,7 +443,7 @@ def patch_node_scale(
     for stateful_set in stateful_sets.items:
         if (
             validator_sts_prefix in stateful_set.metadata.name
-            or fullnode_sts_prefix in stateful_set.metadata.name
+            or (vfn_enabled and fullnode_sts_prefix in stateful_set.metadata.name)
         ):
             apps_client.patch_namespaced_stateful_set_scale(
                 stateful_set.metadata.name,
@@ -476,7 +477,7 @@ def kube_stop(
             continue
         for i in range(CLUSTERS[available_cluster]):
             node_name = f"aptos-node-{i}"
-            patch_node_scale(available_cluster, node_name, 0)
+            patch_node_scale(available_cluster, node_name, 0, vfn_enabled=True)
 
 
 @main.command("start")
@@ -486,8 +487,15 @@ def kube_stop(
     default=Cluster.ALL.value,
     help="Cluster to run the command on",
 )
+@click.option(
+    "--vfn-enabled",
+    is_flag=True,
+    default=False,
+    help="",
+)
 def kube_start(
     cluster: str,
+    vfn_enabled: bool,
 ) -> None:
     """Start all compute on the cluster"""
     cluster = Cluster(cluster)
@@ -496,7 +504,7 @@ def kube_start(
             continue
         for i in range(CLUSTERS[available_cluster]):
             node_name = f"aptos-node-{i}"
-            patch_node_scale(available_cluster, node_name, 1)
+            patch_node_scale(available_cluster, node_name, 1, vfn_enabled)
 
 
 @main.command("delete")
@@ -598,15 +606,18 @@ def get_current_era() -> str:
 
 
 def aptos_node_helm_template(
-    cluster: Cluster, helm_chart_directory: str, values_file: str, dry_run: bool = False
+    cluster: Cluster, helm_chart_directory: str, values_file: str, vfn_enabled: bool, dry_run: bool = False
 ) -> Tuple[Cluster, int]:
     num_nodes = CLUSTERS[cluster]
     helm_upgrade_override_values = [
         "--set",
-        f"numFullnodeGroups={num_nodes}",
-        "--set",
         f"numValidators={num_nodes}",
     ]
+    if vfn_enabled:
+        helm_upgrade_override_values += [
+            "--set",
+            f"numFullnodeGroups={num_nodes}",
+        ]
     proc = subprocess.Popen(
         f"helm --kube-context={KUBE_CONTEXTS[cluster]} template {cluster.value} {helm_chart_directory} -f={values_file} {' '.join(helm_upgrade_override_values)} > helm-template-{cluster.value}.yaml;"
         + f"kubectl --context={KUBE_CONTEXTS[cluster]} apply -f helm-template-{cluster.value}.yaml"
@@ -661,6 +672,12 @@ def aptos_node_helm_template(
     help="Whether to start the cluster from scratch",
 )
 @click.option(
+    "--vfn-enabled",
+    is_flag=True,
+    default=False,
+    help="",
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     default=False,
@@ -671,6 +688,7 @@ def upgrade(
     values_file: str,
     helm_chart_directory: str,
     new: bool,
+    vfn_enabled: bool,
     dry_run: bool,
 ) -> None:
     """Wipes the cluster and redeploys via helm chart"""
@@ -704,6 +722,7 @@ def upgrade(
                     available_cluster,
                     helm_chart_directory,
                     values_file,
+                    vfn_enabled,
                     dry_run,
                 )
                 for available_cluster in CLUSTERS
