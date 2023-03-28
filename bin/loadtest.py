@@ -56,7 +56,7 @@ def build_pod_template() -> PodTemplate:
             "containers": [
                 {
                     "name": LOADTEST_POD_NAME,
-                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_7c85e3375b1e739f5c26d4df7767d96871e53bd3",
+                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_15b354f1f74c3e6ec7cf0a4964f65a316d5e4c7f",
                     "env": [
                         {
                             "name": "RUST_BACKTRACE",
@@ -112,6 +112,7 @@ def build_loadtest_command(
         ],
         f"--duration={loadtestConfig['duration']}",
         f"--delay-after-minting=300",
+        f"--expected-max-txns={20000 * loadtestConfig['duration']}",
         "--txn-expiration-time-secs=" f"{loadtestConfig['txn_expiration_time_secs']}",
         "--max-transactions-per-account=5",
         *(

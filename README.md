@@ -191,11 +191,8 @@ time ./bin/cluster.py upgrade
 Submit load test against the network. The root keypair is hardcoded in genesis. The below commands show some cutomization options for the loadtest utility.
 
 ```
-# apply a loadtest with a constant target TPS
-./bin/loadtest.py 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19 4 --apply --target-tps 5000
-
-# apply a loadtest with mempool backlog 50,000 for 1 hour
-./bin/loadtest.py 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19 4 --apply --duration 3600 --mempool-backlog 50000
+# apply the benchmnark loadtest for an hour:
+./bin/loadtest.py 0xE25708D90C72A53B400B27FC7602C4D546C7B7469FA6E12544F0EBFB2F16AE19 7 --apply --txn-expiration-time-secs=60 --mempool-backlog=25000 --duration=3600 --only-within-cluster --coin-transfer
 
 # more customizations can be seen here
 ./bin/loadtest.py --help
