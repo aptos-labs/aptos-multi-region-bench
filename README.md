@@ -47,7 +47,7 @@ Throughput (snapshot Dec 5, 2022 - Jan 3, 2023):
 
 ### Clone the repo
 
-This repo uses a git submodule to https://github.com/aptos-labs/deployment, so be sure to clone that as well
+This repo uses a git submodule to https://github.com/aptos-labs/aptos-core, so be sure to clone that as well
 
 ```
 git clone https://github.com/aptos-labs/aptos-multi-region-bench.git --recurse-submodules

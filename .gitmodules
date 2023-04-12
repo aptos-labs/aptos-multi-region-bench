@@ -1,3 +1,3 @@
-[submodule "submodules/deployment-main"]
-	path = submodules/deployment-main
-	url = git@github.com:aptos-labs/deployment.git
+[submodule "submodules/aptos-core"]
+	path = submodules/aptos-core
+	url = https://github.com/aptos-labs/aptos-core
