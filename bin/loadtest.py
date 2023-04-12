@@ -56,7 +56,7 @@ def build_pod_template() -> PodTemplate:
             "containers": [
                 {
                     "name": LOADTEST_POD_NAME,
-                    "image": "us-west1-docker.pkg.dev/aptos-global/aptos-internal/tools:performance_15b354f1f74c3e6ec7cf0a4964f65a316d5e4c7f",
+                    "image": "aptoslabs/tools:devnet_performance",
                     "env": [
                         {
                             "name": "RUST_BACKTRACE",

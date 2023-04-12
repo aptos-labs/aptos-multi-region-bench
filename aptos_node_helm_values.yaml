@@ -1,4 +1,4 @@
-imageTag: performance_0d37cce89361ef80b87655bbe50a42944e626715 # change this to the docker image tag you want
+imageTag: devnet_performance # change this to the docker image tag you want
 
 chain:
   chain_id: TESTING
@@ -46,7 +46,7 @@ validator:
                   - aptos-node
           topologyKey: kubernetes.io/hostname
   image:
-    repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
+    repo: aptoslabs/validator
   resources:
     limits:
       cpu: "42"
@@ -108,7 +108,7 @@ fullnode:
                   - aptos-node
           topologyKey: kubernetes.io/hostname
   image:
-    repo: us-west1-docker.pkg.dev/aptos-global/aptos-internal/validator
+    repo: aptoslabs/validator
   resources:
     limits:
       cpu: "42"
