@@ -16,7 +16,7 @@ locals {
 
 
 module "aptos-node" {
-  source = "../../submodules/deployment-main/aptos-node/gcp"
+  source = "../../submodules/aptos-core/terraform/aptos-node/gcp"
 
   manage_via_tf = false # manage via cluster.py tooling instead
 

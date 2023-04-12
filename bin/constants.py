@@ -13,7 +13,7 @@ class Cluster(Enum):
 
 
 GENESIS_DIRECTORY = "genesis"
-APTOS_NODE_HELM_CHART_DIRECTORY = "submodules/deployment-main/helm/aptos-node"
+APTOS_NODE_HELM_CHART_DIRECTORY = "submodules/aptos-core/terraform/helm/aptos-node"
 APTOS_NODE_HELM_VALUES_FILE = "aptos_node_helm_values.yaml"
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
