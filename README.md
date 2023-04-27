@@ -1,6 +1,6 @@
 # Aptos Multi-Region Benchmark Setup
 
-This repo contains deployment configurations, operational scripts, and benchmarks for a multi-region Aptos benchmark on GKE. 
+This repo contains deployment configurations, operational scripts, and benchmarks for a multi-region Aptos benchmark on Google Cloud. 
 * Each region is deployed separately via open source Terraform modules published by Aptos Labs. These are the same deployment modules used to run validators and fullnodes in production on mainnet. Validators and fullnodes connect to each other over the public internet.
 * A lightweight wrapper around the kube API and `kubectl` provides a way to form the network and submit load against the network
 
@@ -170,7 +170,7 @@ In order to progress to the next steps, check that all LoadBalancers have been p
 ./bin/cluster.py kube get svc | grep -c pending
 ```
 
-To run genesis for the first time, execute the below command. This will generate keys and get the public IP for each of the validators and fullnodes and then generate a genesis and waypoint. These will then be uploaded to each node (via kubernetes) for startup
+To run genesis for the first time, execute the below command. This will generate keys and get the public IP for each of the validators and fullnodes and then generate a genesis blob and waypoint. These will then be uploaded to each node (via kubernetes) for startup
 ```
 ./bin/cluster.py genesis create --generate-keys
 ```
@@ -183,7 +183,7 @@ time ./bin/cluster.py upgrade
 
 ## Scripts Reference
 
-`bin/loadtest.py` - little loadtest utility.
+`bin/loadtest.py` - cluster loadtest utility.
 `bin/cluster.py` - cluster management utility. Creates genesis, and manages nodes lifecycle
 
 ### `loadtest.py`
@@ -225,7 +225,7 @@ To bring back the network, you can try:
 To wipe the chain, change the chain's "era" in the helm values in `aptos_node_helm_values.yaml`. This tells the kubernetes workloads to switch their underlying volumes, thus starting the chian from scratch. Then, follow the steps above to [Run genesis](#run-genesis)
 
 #### Changing the network size (and starting a new network)
-* Edit `CLUSTERS` in `constants.py` to change the number of validators (and VFNs) in each region. Please note the quota
+* Edit `CLUSTERS` in `constants.py` to change the number of validators (and VFNs) in each region. Please note the quota in your GCP project.
 * Follow above instructions to re-run genesis and wipe the chain.
 
 #### Changing the node deployment configuration
